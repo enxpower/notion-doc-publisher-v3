@@ -1,0 +1,13 @@
+{
+  "name": "notion-doc-publisher-v3",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Lightweight enterprise Notion document publisher V3",
+  "scripts": {
+    "blueprint": "echo 'Read prompts/00_SYSTEM_BLUEPRINT.md first'",
+    "dev": "echo 'Implementation not started yet'",
+    "build": "echo 'Implementation not started yet'",
+    "validate": "echo 'Implementation not started yet'"
+  }
+}
