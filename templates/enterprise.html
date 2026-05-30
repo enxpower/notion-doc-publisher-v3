@@ -9,18 +9,27 @@
   </head>
   <body>
     <main class="document">
-      <header class="document-header">
-        <p class="document-kicker">{{brand}} / {{documentType}}</p>
+      <header class="document-masthead">
+        <div class="masthead-row">
+          <div class="masthead-brand">{{brand}}</div>
+          <div class="masthead-slogan">ENGINEERED FOR EXTREME CONDITIONS</div>
+        </div>
+      </header>
+      <section class="document-title-block">
+        <p class="document-id">{{docId}}</p>
+        <p class="document-kicker">{{documentType}}</p>
         <h1>{{title}}</h1>
+      </section>
+      <section class="document-summary" aria-label="Document metadata">
         <dl class="document-meta">
-          <div><dt>DOC_ID</dt><dd><code>{{docId}}</code></dd></div>
           <div><dt>Version</dt><dd>{{version}}</dd></div>
           <div><dt>Client</dt><dd>{{client}}</dd></div>
           <div><dt>Project</dt><dd>{{project}}</dd></div>
+          <div><dt>Type</dt><dd>{{documentType}}</dd></div>
           <div><dt>Status</dt><dd>{{status}}</dd></div>
           <div><dt>Visibility</dt><dd>{{visibility}}</dd></div>
         </dl>
-      </header>
+      </section>
       <section class="document-content">
         {{body}}
       </section>

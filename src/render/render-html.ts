@@ -51,13 +51,18 @@ export function renderIndexHtml(documents: DocumentModel[]): string {
   </head>
   <body>
     <main class="site-index">
-      <h1>Document Index</h1>
-      <table>
-        <thead>
-          <tr><th>Title</th><th>DOC_ID</th><th>Brand</th><th>Client</th><th>Project</th><th>Type</th><th>Version</th></tr>
-        </thead>
-        <tbody>${rows}</tbody>
-      </table>
+      <header class="register-header">
+        <p class="document-kicker">Published Documents</p>
+        <h1>Document Register</h1>
+      </header>
+      <div class="register-table-wrap">
+        <table class="document-register">
+          <thead>
+            <tr><th>Title</th><th>DOC_ID</th><th>Brand</th><th>Client</th><th>Project</th><th>Type</th><th>Version</th></tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
     </main>
   </body>
 </html>
