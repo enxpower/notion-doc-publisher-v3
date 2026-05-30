@@ -5,9 +5,16 @@
   "type": "module",
   "description": "Lightweight enterprise Notion document publisher V3",
   "scripts": {
-    "blueprint": "echo 'Read prompts/00_SYSTEM_BLUEPRINT.md first'",
-    "dev": "echo 'Implementation not started yet'",
-    "build": "echo 'Implementation not started yet'",
-    "validate": "echo 'Implementation not started yet'"
+    "validate": "tsc && node .tmp/cli/validate.js",
+    "build": "tsc && node .tmp/cli/build.js",
+    "assign-id:dry": "tsc && node .tmp/cli/assign-id.js --dry-run",
+    "assign-id": "tsc && node .tmp/cli/assign-id.js --write",
+    "clean": "tsc && node .tmp/cli/clean.js",
+    "check": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.12",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3"
   }
 }

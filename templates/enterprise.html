@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{title}} - {{docId}}</title>
+    <link rel="stylesheet" href="{{screenCss}}">
+    <link rel="stylesheet" href="{{printCss}}" media="print">
+  </head>
+  <body>
+    <main class="document">
+      <header class="document-header">
+        <p class="document-kicker">{{brand}} / {{documentType}}</p>
+        <h1>{{title}}</h1>
+        <dl class="document-meta">
+          <div><dt>DOC_ID</dt><dd><code>{{docId}}</code></dd></div>
+          <div><dt>Version</dt><dd>{{version}}</dd></div>
+          <div><dt>Client</dt><dd>{{client}}</dd></div>
+          <div><dt>Project</dt><dd>{{project}}</dd></div>
+          <div><dt>Status</dt><dd>{{status}}</dd></div>
+          <div><dt>Visibility</dt><dd>{{visibility}}</dd></div>
+        </dl>
+      </header>
+      <section class="document-content">
+        {{body}}
+      </section>
+    </main>
+  </body>
+</html>
