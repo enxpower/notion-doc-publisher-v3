@@ -34,7 +34,6 @@ type DocumentMeta = {
   status: "Draft" | "Review" | "Final" | "Archived";
   visibility: "Public" | "Client" | "Internal";
   publish: boolean;
-  generatedAt: string;
   canonicalPath: string;
 };
 ```
@@ -51,7 +50,7 @@ type EntityRef = {
 };
 ```
 
-`token` is required for `Brand` and `Document Type` because they participate in `DOC_ID`. Client and project do not need ID tokens in V1, but they do need safe slugs for output paths and indexes.
+`token` is required for `Brand` and `Document Type` because they participate in `DOC_ID`. Client and project do not need ID tokens in V1. Their slugs are useful for indexes and display grouping, but not for canonical document paths.
 
 ### Document Type Reference
 
@@ -129,7 +128,7 @@ type DocumentAsset = {
 };
 ```
 
-V1 can start with remote Notion file URLs if local asset downloading is not implemented immediately, but the model should allow later asset copying into the static output tree. Print-ready output works better when assets are local and deterministic.
+Publishable V1 output requires local asset copying. Remote Notion file URLs are allowed only for draft preview output because Notion signed URLs can expire and are not reliable for static hosting or PDF generation.
 
 ## Source Info
 
@@ -178,21 +177,23 @@ Version is separate and should never be concatenated into `docId`.
 
 The renderer may display version near the title or metadata table, but it must not change links, output identity, or ID generation.
 
+Brand or document type changes after assignment do not change `docId`. If current metadata no longer matches the brand/type tokens embedded in a valid `docId`, the model should carry a validation warning rather than rewriting the ID.
+
 ## Output Path Derivation
 
 The canonical document path should be deterministic. Recommended V1 pattern:
 
 ```text
-/docs/{brandSlug}/{documentTypeSlug}/{docId}/
+/docs/{docId}/
 ```
 
 Example:
 
 ```text
-/docs/arcbos/agreement/ARCBOS-AGR-2605-0039/
+/docs/ARCBOS-AGR-2605-0039/
 ```
 
-The exact static file path is defined in `docs/OUTPUT_SPEC.md`. The document model should expose the canonical path so index generation and rendering use the same value.
+The exact static file path is defined in `docs/OUTPUT_SPEC.md`. The document model should expose the canonical path so index generation and rendering use the same value. Brand, client, project, and document type labels may be used for index grouping, but they must not affect canonical URLs in V1.
 
 ## Rendering Context
 
@@ -227,6 +228,7 @@ Normalization should:
 Document model validation should fail when:
 
 - `meta.docId` is missing or malformed.
+- Another document in the same database snapshot has the same `meta.docId`.
 - `meta.title` is empty.
 - `meta.brand.token` is missing.
 - `meta.documentType.token` is missing.
@@ -236,12 +238,14 @@ Document model validation should fail when:
 - `content` has no renderable blocks.
 - Required assets cannot be resolved.
 - The canonical path collides with another document.
+- A publishable document depends on remote-only Notion assets.
 
 It should warn when:
 
 - Unsupported blocks have plain text fallbacks.
 - Rich text annotations are not fully represented.
-- Remote assets are used instead of local copies.
+- Remote assets are used in draft preview output.
+- A valid `DOC_ID` token no longer matches current brand or document type metadata.
 
 ## Future Extensions
 
@@ -257,3 +261,5 @@ The model can later support:
 - PDF-specific render hints.
 
 These should be additive fields. They should not change the core rule that Notion remains the only editing source.
+
+Future extension points must not be scaffolded in V1 unless the implementation needs them for the static HTML publisher. V1 should implement only the minimal model required for Notion normalization, validation, rendering, local assets, and stable output paths.

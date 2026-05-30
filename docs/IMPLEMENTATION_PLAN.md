@@ -2,7 +2,7 @@
 
 ## Goal
 
-Implement a lightweight V3 Notion-to-static-document publisher without depending on V2 code. The first implementation should produce validated static HTML from a development Notion database and leave a clean path for GitHub Pages deployment and Playwright PDF export.
+Implement a lightweight V3 Notion-to-static-document publisher without depending on V2 code. The first implementation should produce validated static HTML from a development Notion database and leave a clean future path for GitHub Pages deployment and Playwright PDF export.
 
 No implementation code exists yet in this plan. This document defines the staged work.
 
@@ -17,6 +17,8 @@ No implementation code exists yet in this plan. This document defines the staged
 - Do not reuse production Notion database IDs during initial development.
 - Keep Notion as the only editing source.
 - Keep V1 small: no CMS framework, workflow engine, database server, or approval module.
+- Do not implement deployment in V1.
+- Keep `validate` and normal `build` read-only with respect to Notion.
 
 ## Phase 0: Architecture And Fixture Setup
 
@@ -30,7 +32,7 @@ Deliverables:
 Exit criteria:
 
 - Development `NOTION_DATABASE_ID` is not a production V2 database ID.
-- Required Notion fields are present.
+- Required Notion fields are present with the frozen V1 property types.
 - Sample documents can safely receive generated `DOC_ID` values.
 
 ## Phase 1: Project Skeleton
@@ -47,6 +49,7 @@ Deliverables:
   - `src/render`
   - `src/build`
 - Add build, validate, and development scripts.
+- Add a separate explicit ID assignment script only after the read-only validation path exists.
 - Add minimal test tooling if useful for ID generation and model validation.
 
 Recommended scripts:
@@ -55,6 +58,7 @@ Recommended scripts:
 {
   "build": "tsx src/build/build-site.ts",
   "validate": "tsx src/build/validate-site.ts",
+  "assign-doc-ids": "tsx src/build/assign-doc-ids.ts",
   "check": "tsc --noEmit"
 }
 ```
@@ -64,6 +68,7 @@ Exit criteria:
 - Project can type-check.
 - Configuration loads safely from environment variables.
 - Missing required environment variables fail with clear errors.
+- `validate` and `build` do not write to Notion.
 
 ## Phase 2: Notion Read Layer
 
@@ -87,14 +92,14 @@ Exit criteria:
 - The system can fetch page body blocks.
 - Unsupported or missing properties produce structured validation issues.
 
-## Phase 3: DOC_ID Generation
+## Phase 3: Explicit DOC_ID Assignment
 
 Deliverables:
 
 - Map `Brand` to brand tokens.
 - Map `Document Type` to type tokens.
 - Scan existing valid `DOC_ID` values.
-- Generate `BRAND-TYPE-YYMM-SEQ4` for pages with missing IDs.
+- Generate `BRAND-TYPE-YYMM-SEQ4` for pages with missing IDs through an explicit command.
 - Write generated IDs back to Notion only for missing `DOC_ID` fields.
 - Detect malformed IDs and collisions.
 
@@ -103,7 +108,14 @@ Rules:
 - Never overwrite an existing valid `DOC_ID`.
 - Never silently replace a malformed `DOC_ID`.
 - Keep version separate from `DOC_ID`.
-- Use global sequence numbers across the master database in V1.
+- Use sequence numbers scoped by `YYMM` globally across all brands and document types.
+- Never reuse `DOC_ID` values.
+- Keep brand/type changes from rewriting `DOC_ID`.
+- Fail assignment if the next sequence for a `YYMM` would exceed `9999`.
+- Keep `validate` and `build` read-only; only `assign-doc-ids` may write IDs.
+- Produce a dry-run assignment plan before mutation.
+- Use fail-fast writes: any invalid candidate or collision stops the command before any ID is written.
+- Re-query the database immediately before writing and fail on concurrent assignment conflicts.
 
 Exit criteria:
 
@@ -111,6 +123,8 @@ Exit criteria:
 - Existing IDs remain unchanged.
 - Malformed IDs fail validation.
 - Sequence behavior is deterministic in tests through `DOC_ID_YEAR_MONTH`.
+- The assignment command reports a dry run before writing.
+- No partial ID assignment occurs when a candidate fails validation or collision checks.
 
 ## Phase 4: Document Model And Validation
 
@@ -130,6 +144,9 @@ Validation must cover:
 - Empty content.
 - Unsupported block handling.
 - Output path collisions.
+- Duplicate `DOC_ID` values.
+- Remote-only assets on publishable documents.
+- Unsafe links and unsupported publish-blocking Notion blocks.
 
 Exit criteria:
 
@@ -147,10 +164,10 @@ Deliverables:
 - Copy CSS into `dist/assets/css/`.
 - Escape text and sanitize links.
 
-Recommended output path:
+Required output path:
 
 ```text
-dist/docs/{brandSlug}/{documentTypeSlug}/{DOC_ID}/index.html
+dist/docs/{DOC_ID}/index.html
 ```
 
 Exit criteria:
@@ -159,6 +176,7 @@ Exit criteria:
 - The site index links to rendered documents.
 - Rendered HTML can be opened locally without a server.
 - No client-side JavaScript is required for content.
+- Publishable documents use local asset copies.
 
 ## Phase 6: Print Quality
 
@@ -170,9 +188,13 @@ Deliverables:
 
 Exit criteria:
 
-- Documents print cleanly from browser print preview.
+- Documents target A4 paper with 18mm margins.
+- Documents do not depend on browser-generated headers or footers.
+- Headings avoid page breaks immediately after the heading.
+- Tables avoid broken rows where possible.
+- Wide tables use a shrink or overflow strategy.
+- Images render at `max-width: 100%`.
 - Content does not depend on screen-only UI.
-- Tables and images have acceptable page-break behavior.
 
 ## Phase 7: PDF Automation Path
 
@@ -187,19 +209,19 @@ Exit criteria:
 - PDF output uses the same HTML and CSS as the static site.
 - PDF generation is optional and not required for basic static publishing.
 
-## Phase 8: Deployment Preparation
+## Phase 8: V1 Release Boundary
 
 Deliverables:
 
-- Add a deploy command that is disabled unless `TARGET_SITE_REPO` is configured.
-- Validate the target is not a protected production repository during development.
-- Document manual deployment steps before adding automation.
+- Confirm deployment remains out of V1.
+- Document that `dist/` can be manually inspected and later deployed by a separately designed process.
+- Do not add deploy scripts, deployment configuration, GitHub Actions changes, or target repository writes.
 
 Exit criteria:
 
-- Static output can be copied to a non-production GitHub Pages target.
-- Build and deploy remain separate operations.
-- No existing GitHub Actions are changed without explicit later approval.
+- Static output is ready for manual inspection.
+- No deploy command exists.
+- No existing GitHub Actions are changed.
 
 ## Testing Strategy
 
@@ -213,6 +235,7 @@ Prioritize tests around deterministic logic:
 - Output path derivation.
 - Notion property normalization with fixtures.
 - HTML escaping and link sanitization.
+- Local asset requirement for publishable output.
 
 Integration tests can use recorded Notion-like fixtures first. Live Notion API tests should be opt-in because they require credentials and can mutate data when ID generation writes back.
 
@@ -223,11 +246,11 @@ Expected eventual commands:
 ```text
 npm run validate
 npm run build
+npm run assign-doc-ids
 npm run pdf
-npm run deploy
 ```
 
-`validate` should be safe and read-only. `build` should write only local `dist/`. ID generation should be explicit or clearly documented if it writes missing `DOC_ID` values back to Notion.
+`validate` is safe and read-only. `build` writes only local `dist/` and does not write to Notion. `assign-doc-ids` is the only command that may write missing `DOC_ID` values back to Notion, and it must provide a dry-run report before mutation. Deployment is not a V1 command.
 
 ## Release Checklist For V1
 
@@ -237,10 +260,14 @@ Before calling V1 usable:
 - Sample documents cover the supported block types.
 - Required metadata validation works.
 - `DOC_ID` generation is deterministic and collision-safe.
+- `validate` and `build` are read-only with respect to Notion.
 - Static HTML output is stable and readable.
-- Print CSS is acceptable for PDF path.
+- Canonical document paths use `/docs/{DOC_ID}/`.
+- Publishable output has local asset copies.
+- Print CSS meets the frozen A4/18mm print target.
 - Unsupported blocks are visible in logs.
 - No V2 repositories or workflows were modified.
+- No deployment automation was added.
 
 ## Future Work
 
@@ -256,3 +283,5 @@ Later releases may add:
 - Optional references to external client or project registries.
 
 These are extensions. They should not change the V1 principle that a simple Notion database and static output are the core product.
+
+Future extension points remain documented but must not be scaffolded in V1 unless they are required for the core static HTML publisher.

@@ -10,18 +10,20 @@ The database should stay small and easy for authors to understand. It should cap
 
 | Property | Type | Required | Owner | Notes |
 | --- | --- | --- | --- | --- |
-| `DOC_ID` | Title, rich text, or unique text property | Yes after generation | System | Generated automatically when missing. |
-| `Title` | Title or rich text | Yes | User | Human-readable document title. |
-| `Brand` | Select | Yes | User | Brand or company namespace for ID and presentation. |
-| `Client` | Select or rich text | Yes | User | Client name; may be `Internal` for internal documents. |
-| `Project` | Select or rich text | Yes | User | Project, program, or workstream name. |
-| `Document Type` | Select | Yes | User | Type token used in `DOC_ID`. |
-| `Version` | Select or rich text | Yes | User | Semantic document version, stored separately from `DOC_ID`. |
-| `Status` | Select | Yes | User | Draft/publishing lifecycle state. |
-| `Visibility` | Select | Yes | User | Intended audience or hosting scope. |
-| `Publish` | Checkbox | Yes | User | Explicit publish flag. |
+| `Title` | `title` | Yes | User | Human-readable document title and the single Notion title property. |
+| `DOC_ID` | `rich_text` scalar | Yes after assignment | System | Assigned only by the explicit ID assignment command. |
+| `Brand` | `select` | Yes | User | Brand or company namespace for ID and presentation. |
+| `Client` | `select` | Yes | User | Client name; may be `Internal` for internal documents. |
+| `Project` | `select` | Yes | User | Project, program, or workstream name. |
+| `Document Type` | `select` | Yes | User | Type token used in `DOC_ID`. |
+| `Version` | `select` | Yes | User | Semantic document version, stored separately from `DOC_ID`. |
+| `Status` | `select` | Yes | User | Draft/publishing lifecycle state. |
+| `Visibility` | `select` | Yes | User | Intended audience or hosting scope. |
+| `Publish` | `checkbox` | Yes | User | Explicit publish flag. |
 
-If Notion database constraints make `DOC_ID` awkward as the title property, `Title` may be the Notion title and `DOC_ID` may be a separate text property. The implementation should support that choice through configuration, but the logical fields remain required.
+These property types are frozen for V1. The implementation should not support alternate property types unless the architecture is revised first.
+
+`DOC_ID` is a scalar rich text value. It must contain exactly one plain text ID value after trimming. Multiple rich text spans are acceptable only if their concatenated plain text is exactly one valid `DOC_ID`; links, mentions, and formatting in `DOC_ID` have no semantic meaning and should be rejected if they prevent scalar extraction.
 
 ## Recommended Select Values
 
@@ -132,13 +134,26 @@ AGIM-MEM-2605-0041
 
 Generation rules:
 
-- Generate `DOC_ID` only when the field is empty.
+- Assign `DOC_ID` only through an explicit command, separate from `validate` and `build`.
+- `validate` and normal `build` are read-only by default and must not write `DOC_ID` values.
+- Assign `DOC_ID` only when the field is empty.
 - Never regenerate an existing valid `DOC_ID` automatically.
 - Reject an existing malformed `DOC_ID` instead of overwriting it.
-- Sequence numbers are global across the master database for V1.
-- The sequence is the next number after the highest existing valid `SEQ4`.
+- Malformed `DOC_ID` values block publishable output.
+- Sequence numbers are scoped by `YYMM` globally across all brands and document types.
+- For a given `YYMM`, the sequence is the next number after the highest existing valid `SEQ4` in that `YYMM`.
 - `YYMM` should default to the current build month, with an optional environment override such as `DOC_ID_YEAR_MONTH` for deterministic testing.
 - The generator must detect collisions before writing.
+- `DOC_ID` values are never reused, including after archive or deletion.
+- Deleted pages are not a source for new assignments, so operators must keep an ID ledger or avoid deletion if strict deletion history is required.
+- Existing valid `DOC_ID` values are never overwritten.
+- Brand or document type changes after assignment do not change `DOC_ID`.
+- A valid `DOC_ID` whose brand/type tokens no longer match current metadata should warn but should not be rewritten automatically.
+- If the next scoped sequence would exceed `9999`, assignment must fail for that `YYMM`.
+- The assignment command must show a dry-run assignment plan before writing.
+- Assignment is fail-fast. If any candidate has a malformed existing ID, missing token mapping, sequence overflow, or collision, no IDs should be written.
+- The assignment command must re-query the database immediately before writing and fail if the planned IDs are no longer available.
+- Concurrent assignment conflicts are resolved by failing the later command, not by overwriting or automatically choosing a new sequence after partial writes.
 
 ## Page Body Content
 
@@ -164,6 +179,8 @@ V1 schema validation should fail a document when:
 
 - A required property is missing or empty.
 - `DOC_ID` exists but does not match `^[A-Z0-9]+-[A-Z0-9]+-[0-9]{4}-[0-9]{4}$`.
+- A publishable document has a missing `DOC_ID`.
+- Duplicate `DOC_ID` values exist in the database snapshot.
 - `Version` does not match `^v[0-9]+\\.[0-9]+$`.
 - `Brand` has no configured ID token.
 - `Document Type` has no configured ID token.
@@ -171,12 +188,14 @@ V1 schema validation should fail a document when:
 - `Publish` is checked but `Visibility` is not allowed for the active target.
 - The page body has no meaningful content.
 - The generated output path would collide with another document.
+- A publishable document references a required remote Notion asset that has not been copied locally.
 
 Validation may warn, rather than fail, for:
 
 - Missing optional description or summary fields if added later.
 - Unsupported visual styling on rich text.
 - Blocks that can be rendered as plain text fallbacks.
+- A valid `DOC_ID` brand/type token no longer matches current `Brand` or `Document Type` metadata.
 
 ## Environment Configuration
 
@@ -188,9 +207,10 @@ Expected environment variables:
 | --- | --- |
 | `NOTION_TOKEN` | Notion integration token for the development database. |
 | `NOTION_DATABASE_ID` | Master development database ID. Do not use production V2 database IDs initially. |
-| `TARGET_SITE_REPO` | Optional deploy target for later stages. |
 | `TARGET_SITE_DOMAIN` | Optional canonical domain for output metadata. |
 | `DOC_ID_YEAR_MONTH` | Optional deterministic `YYMM` override for ID generation. |
+
+Deployment variables are intentionally out of V1. A deploy target should not be part of the initial schema or command contract.
 
 ## What The Schema Must Not Become
 

@@ -17,7 +17,7 @@ This is a new system. It must not modify, import, or depend on V2 production sys
 ### In Scope
 
 - Read document metadata and content from one master Notion database.
-- Generate missing document IDs in the required `BRAND-TYPE-YYMM-SEQ4` format.
+- Assign missing document IDs through an explicit command using the required `BRAND-TYPE-YYMM-SEQ4` format.
 - Convert Notion page content into a normalized internal document model.
 - Render static HTML documents with shared screen and print CSS.
 - Emit deterministic output suitable for GitHub Pages.
@@ -35,6 +35,7 @@ This is a new system. It must not modify, import, or depend on V2 production sys
 - Database server.
 - Complex permissions or document-level ACLs.
 - Production publishing into existing V2 repositories during initial development.
+- Deployment automation in V1.
 
 ## Repository Structure
 
@@ -98,14 +99,16 @@ Avoid:
 2. Query the master Notion database for candidate pages.
 3. For each page:
    - Read required properties.
-   - Generate and write `DOC_ID` only when missing.
    - Fetch the Notion page blocks.
    - Normalize metadata and blocks into the document model.
    - Validate the document model.
    - Render static HTML.
-4. Copy static assets and CSS.
+4. Copy required local assets and CSS.
 5. Write a static output tree.
-6. Optionally deploy the output to a target GitHub Pages repository in a later release step.
+
+`validate` and normal `build` are read-only with respect to Notion. They must not assign, update, or repair `DOC_ID` values. Missing `DOC_ID` values are handled by a separate explicit ID assignment command.
+
+V1 does not deploy. Deployment remains a future operation after static output is validated manually.
 
 ## Source of Truth
 
@@ -139,6 +142,21 @@ AGIM-MEM-2605-0041
 
 Version is not part of `DOC_ID`. Version is stored separately as values such as `v0.1`, `v1.0`, `v1.1`, and `v2.0`.
 
+Frozen V1 rules:
+
+- `DOC_ID` assignment is an explicit command, separate from `validate` and `build`.
+- `validate` and `build` are read-only by default.
+- Sequence numbers are scoped by `YYMM` globally across all brands and document types.
+- `DOC_ID` values are never reused.
+- Existing valid `DOC_ID` values are never overwritten.
+- Malformed `DOC_ID` values block publishing.
+- Brand or document type changes after assignment do not change `DOC_ID`.
+- A valid `DOC_ID` whose brand/type tokens no longer match current metadata should produce a warning, not an automatic rewrite.
+- ID assignment must produce a dry-run report before mutation.
+- ID assignment is fail-fast. If any candidate assignment is invalid or collides, the command must stop without writing partial IDs.
+- ID assignment must re-query the current database state immediately before writing and must fail on any collision, including concurrent assignment conflicts.
+- If the next sequence for a `YYMM` would exceed `9999`, assignment fails for that `YYMM`.
+
 ## Rendering Pipeline
 
 The renderer should be deterministic and static-first:
@@ -162,7 +180,7 @@ The output should be directly hostable on GitHub Pages. It should include:
 - One HTML file per published document.
 - Shared CSS and assets.
 - A simple index for browsing published documents.
-- Stable paths derived from document metadata and `DOC_ID`.
+- Stable document paths using only `DOC_ID`: `/docs/{DOC_ID}/`.
 
 The detailed output contract is defined in `docs/OUTPUT_SPEC.md`.
 
@@ -179,6 +197,16 @@ The PDF path should use Playwright later:
 
 V1 should design CSS and HTML so this path works cleanly, even if automated PDF export is implemented after the first static HTML build.
 
+Frozen print target:
+
+- A4 paper.
+- 18mm page margin.
+- No dependency on browser-generated headers or footers.
+- Headings avoid page breaks immediately after the heading.
+- Tables avoid broken rows where possible.
+- Wide tables use a shrink or overflow strategy.
+- Images render at `max-width: 100%`.
+
 ## Validation Rules
 
 Validation protects publishing quality without creating workflow complexity. V1 validation should check:
@@ -188,9 +216,11 @@ Validation protects publishing quality without creating workflow complexity. V1 
 - `Version` matches the supported version pattern.
 - `Status`, `Visibility`, and `Publish` form a valid publishable state.
 - Required title and content are not empty.
-- Brand and document type can produce valid ID tokens and paths.
+- Brand and document type can produce valid ID tokens.
 - Output paths do not collide.
 - Unsupported Notion blocks fail clearly or degrade through documented fallbacks.
+- Publishable output has local copies of required assets.
+- Remote Notion assets are allowed only for draft preview output.
 
 Validation details are defined in `docs/NOTION_SCHEMA.md` and `docs/DOCUMENT_MODEL.md`.
 
@@ -211,6 +241,8 @@ The architecture leaves room for:
 
 These must remain extensions around the simple master database model, not reasons to turn V1 into a CMS.
 
+Future extension points must remain documented but not scaffolded in V1. V1 implementation should not create extension frameworks for themes, deployment, search, sitemap generation, external registries, or incremental builds.
+
 ## V1 Will Not Do
 
 V1 will not:
@@ -226,3 +258,4 @@ V1 will not:
 - Require a database server.
 - Require Next.js or another application framework.
 - Generate versioned `DOC_ID` values.
+- Deploy output automatically.

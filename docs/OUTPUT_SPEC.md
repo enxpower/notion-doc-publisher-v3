@@ -16,14 +16,10 @@ Recommended structure:
 dist/
   index.html
   docs/
-    arcbos/
-      agreement/
-        ARCBOS-AGR-2605-0039/
-          index.html
-    energize/
-      specification/
-        ENERGIZE-SPEC-2605-0040/
-          index.html
+    ARCBOS-AGR-2605-0039/
+      index.html
+    ENERGIZE-SPEC-2605-0040/
+      index.html
   assets/
     css/
       screen.css
@@ -42,16 +38,16 @@ dist/
 Recommended document URL path:
 
 ```text
-/docs/{brandSlug}/{documentTypeSlug}/{DOC_ID}/
+/docs/{DOC_ID}/
 ```
 
 Example:
 
 ```text
-/docs/arcbos/agreement/ARCBOS-AGR-2605-0039/
+/docs/ARCBOS-AGR-2605-0039/
 ```
 
-This path is stable across versions because version is not part of `DOC_ID`. The rendered document should display `Version`, but version should not alter the canonical path in V1.
+This path is stable across versions and metadata changes because version, brand slug, document type slug, client, project, and title are not part of the canonical path. The rendered document should display `Version`, brand, client, project, and document type, but those fields should not alter the canonical path in V1.
 
 ## Required Pages
 
@@ -132,9 +128,15 @@ Recommended document shell:
 
 `print.css` should optimize paper/PDF output:
 
-- Deterministic page margins.
+- A4 paper.
+- 18mm page margins.
+- No dependency on browser-generated headers or footers.
 - Good typography at print sizes.
-- Page-break handling for headings, tables, images, and callouts.
+- Headings avoid page breaks immediately after the heading.
+- Tables avoid broken rows where possible.
+- Wide tables use a shrink or overflow strategy.
+- Images render at `max-width: 100%`.
+- Page-break handling for callouts and code blocks.
 - Hidden navigation or screen-only controls.
 - Visible links where useful.
 
@@ -152,8 +154,9 @@ Rules:
 
 - Asset filenames should be deterministic.
 - Asset references in HTML should be relative or site-root absolute.
-- Missing required assets should fail validation.
-- Remote Notion assets may be allowed as an early fallback, but should produce a warning because signed URLs may expire.
+- Publishable output requires local copies of required assets.
+- Missing or uncopyable required assets should fail validation.
+- Remote Notion assets are allowed only for draft preview output and should produce a warning because signed URLs may expire.
 
 ## Static Index Data
 
@@ -171,7 +174,7 @@ A later build may emit `manifest.json` for search, QA, or integration:
       "project": "Example Project",
       "documentType": "Agreement",
       "version": "v1.0",
-      "path": "/docs/arcbos/agreement/ARCBOS-AGR-2605-0039/"
+      "path": "/docs/ARCBOS-AGR-2605-0039/"
     }
   ]
 }
@@ -181,16 +184,19 @@ This file is generated output only. It is not a source database.
 
 ## GitHub Pages Strategy
 
-The `dist/` tree should be deployable to a separate static site repository or branch. Initial development must not write to production repositories.
+The `dist/` tree is designed so it can later be deployed to GitHub Pages. Deployment is out of V1.
 
-Recommended later deployment approach:
+V1 must not include a deploy command, deploy script, GitHub Actions changes, or writes to a target site repository. Initial development must not write to production repositories.
 
-1. Build into local `dist/`.
-2. Validate output.
-3. Optionally copy or push `dist/` to a configured target repository.
-4. Let GitHub Pages serve the static files.
+Future deployment should be specified only after V1 static output is stable. A later deployment design must include:
 
-The build must not assume deployment is always enabled.
+- explicit opt-in
+- non-production safeguards
+- dry-run output
+- target repository and branch validation
+- no implicit CI deployment
+
+The build must never assume deployment is enabled.
 
 ## Print And PDF Strategy
 
@@ -219,12 +225,13 @@ Output validation should fail when:
 - A publishable document cannot render.
 - A required CSS file is missing.
 - A required asset cannot be copied or referenced.
+- A publishable document references remote-only Notion assets.
 - Generated HTML is empty or missing the main document content.
 - A generated link points outside allowed schemes unexpectedly.
 
 Output validation should warn when:
 
-- A document uses remote assets.
+- A draft preview document uses remote assets.
 - A block was rendered with a fallback.
 - A document has unusually deep heading jumps.
 - A table may overflow narrow screens or printed pages.
@@ -240,4 +247,4 @@ V1 output will not include:
 - Approval screens.
 - CRM dashboards.
 - Dynamic preview APIs.
-- Production deploy automation enabled by default.
+- Any deployment automation.
