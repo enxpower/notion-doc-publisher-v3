@@ -11,7 +11,8 @@
     "assign-id": "tsc && node .tmp/cli/assign-id.js --write",
     "clean": "tsc && node .tmp/cli/clean.js",
     "preview": "tsc && node .tmp/cli/preview.js",
-    "check": "tsc --noEmit"
+    "check": "tsc --noEmit",
+    "smoke": "npm run check && npm run build"
   },
   "devDependencies": {
     "@types/node": "^20.12.12",

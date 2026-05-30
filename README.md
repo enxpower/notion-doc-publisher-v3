@@ -22,6 +22,19 @@ Fill in `NOTION_TOKEN` and `NOTION_DATABASE_ID` for a development Notion databas
 
 Configure `PUBLISHABLE_STATUSES`, `BRAND_TOKENS_JSON`, and `DOCUMENT_TYPE_TOKENS_JSON` for your database. The implementation does not ship with built-in brand or document type token assumptions.
 
+## Local Workflow
+
+```sh
+npm install
+cp .env.example .env
+# Fill in Notion variables and token maps in .env
+npm run assign-id:dry
+npm run assign-id
+npm run validate
+npm run build
+npm run preview
+```
+
 ## Commands
 
 ```sh
@@ -31,6 +44,7 @@ npm run assign-id:dry
 npm run assign-id
 npm run preview
 npm run clean
+npm run smoke
 ```
 
 `validate` reads Notion and writes `dist/reports/validation-report.json`.
