@@ -167,7 +167,7 @@ Open `dist/docs/{DOC_ID}/index.html` in a browser and verify:
 
 Use browser print preview on `dist/docs/{DOC_ID}/index.html` and verify:
 
-- Paper target is A4.
+- Paper target is US Letter.
 - Margins are 18mm.
 - No browser header/footer dependency is required.
 - Page card border and shadow are absent.

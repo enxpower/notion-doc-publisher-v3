@@ -128,7 +128,7 @@ Recommended document shell:
 
 `print.css` should optimize paper/PDF output:
 
-- A4 paper.
+- US Letter paper.
 - 18mm page margins.
 - No dependency on browser-generated headers or footers.
 - Good typography at print sizes.

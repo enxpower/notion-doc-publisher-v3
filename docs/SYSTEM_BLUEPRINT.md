@@ -199,7 +199,7 @@ V1 should design CSS and HTML so this path works cleanly, even if automated PDF 
 
 Frozen print target:
 
-- A4 paper.
+- US Letter paper.
 - 18mm page margin.
 - No dependency on browser-generated headers or footers.
 - Headings avoid page breaks immediately after the heading.

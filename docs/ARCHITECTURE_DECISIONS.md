@@ -45,7 +45,7 @@ Status: frozen. Implementation may start after this architecture freeze. Any cha
 
 ## Frozen Print Target
 
-- Paper size: A4.
+- Paper size: US Letter.
 - Margin: 18mm.
 - Browser-generated headers and footers are not required.
 - Headings avoid page breaks immediately after the heading.

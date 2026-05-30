@@ -188,7 +188,7 @@ Deliverables:
 
 Exit criteria:
 
-- Documents target A4 paper with 18mm margins.
+- Documents target US Letter paper with 18mm margins.
 - Documents do not depend on browser-generated headers or footers.
 - Headings avoid page breaks immediately after the heading.
 - Tables avoid broken rows where possible.
@@ -264,7 +264,7 @@ Before calling V1 usable:
 - Static HTML output is stable and readable.
 - Canonical document paths use `/docs/{DOC_ID}/`.
 - Publishable output has local asset copies.
-- Print CSS meets the frozen A4/18mm print target.
+- Print CSS meets the frozen US Letter/18mm print target.
 - Unsupported blocks are visible in logs.
 - No V2 repositories or workflows were modified.
 - No deployment automation was added.
