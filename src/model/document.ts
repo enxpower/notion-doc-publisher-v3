@@ -38,6 +38,7 @@ export type DocumentAsset = {
   sourceUrl: string;
   outputPath: string;
   kind: "image" | "file";
+  notionBlockId?: string;
   alt?: string;
   caption?: RichTextSpan[];
   contentType?: string;

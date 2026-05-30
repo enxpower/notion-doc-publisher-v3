@@ -10,6 +10,7 @@
     "assign-id:dry": "tsc && node .tmp/cli/assign-id.js --dry-run",
     "assign-id": "tsc && node .tmp/cli/assign-id.js --write",
     "clean": "tsc && node .tmp/cli/clean.js",
+    "preview": "tsc && node .tmp/cli/preview.js",
     "check": "tsc --noEmit"
   },
   "devDependencies": {

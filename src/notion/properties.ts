@@ -184,6 +184,7 @@ function blocksToDocumentBlocks(blocks: NotionBlock[], pageId: string, warnings:
             sourceUrl: source,
             outputPath: name,
             kind: block.type,
+            notionBlockId: block.id,
             alt: caption.map((span) => span.text).join("") || undefined,
             caption,
             local: false

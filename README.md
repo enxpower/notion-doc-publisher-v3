@@ -29,6 +29,7 @@ npm run validate
 npm run build
 npm run assign-id:dry
 npm run assign-id
+npm run preview
 npm run clean
 ```
 
@@ -44,6 +45,8 @@ npm run clean
 `assign-id:dry` creates `dist/reports/assign-id-report.json` without writing to Notion.
 
 `assign-id` is the only command that writes `DOC_ID` values to Notion. It re-queries before writing and fails on conflicts.
+
+After `npm run build`, run `npm run preview` and open `http://localhost:4173/`. Override the port with `PORT=5000 npm run preview`. Press `Ctrl+C` to stop the preview server.
 
 `clean` removes local `dist/`.
 
