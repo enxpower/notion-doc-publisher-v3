@@ -1,6 +1,6 @@
 {
   "name": "notion-doc-publisher-v3",
-  "version": "0.1.0",
+  "version": "0.2.0-preview-deploy",
   "private": true,
   "type": "module",
   "description": "Lightweight enterprise Notion document publisher V3",
@@ -12,7 +12,9 @@
     "clean": "tsc && node .tmp/cli/clean.js",
     "preview": "tsc && node .tmp/cli/preview.js",
     "check": "tsc --noEmit",
-    "smoke": "npm run check && npm run build"
+    "smoke": "npm run check && npm run build",
+    "ci:writeback": "tsc && node .tmp/cli/writeback-preview.js",
+    "publish:preview": "npm run assign-id && npm run build && npm run ci:writeback"
   },
   "devDependencies": {
     "@types/node": "^20.12.12",

@@ -12,6 +12,12 @@ export type AppConfig = {
   documentTypeTokens: Record<string, string>;
 };
 
+export type PreviewDeployConfig = {
+  enabled: boolean;
+  baseUrl?: string;
+  runId: string;
+};
+
 export class UserFacingError extends Error {
   constructor(message: string) {
     super(message);
@@ -71,6 +77,19 @@ export function loadConfigOrThrow(): AppConfig {
     }
     throw new UserFacingError(`Configuration error: ${String(error)}`);
   }
+}
+
+export function loadPreviewDeployConfig(): PreviewDeployConfig {
+  const enabled = process.env.PREVIEW_DEPLOY_ENABLED === "true";
+  const baseUrl = cleanOptional(process.env.PREVIEW_BASE_URL)?.replace(/\/+$/, "");
+  if (enabled && !baseUrl) {
+    throw new UserFacingError("PREVIEW_BASE_URL is required when PREVIEW_DEPLOY_ENABLED=true.");
+  }
+  return {
+    enabled,
+    baseUrl,
+    runId: cleanOptional(process.env.GITHUB_RUN_ID) ?? new Date().toISOString()
+  };
 }
 
 function readRequiredEnv(name: string): string {

@@ -40,6 +40,7 @@ export function createReport(documents: DocumentModel[]): BuildReport {
   return {
     generatedAt: new Date().toISOString(),
     documents: documents.map((document) => ({
+      pageId: document.source.notionPageId,
       docId: document.meta.docId,
       title: document.meta.title,
       path: document.meta.canonicalPath,

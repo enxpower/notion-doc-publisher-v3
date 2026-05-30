@@ -33,6 +33,7 @@ npm run assign-id
 npm run validate
 npm run build
 npm run preview
+npm run publish:preview
 ```
 
 ## Commands
@@ -64,6 +65,59 @@ After `npm run build`, run `npm run preview` and open `http://localhost:4173/`. 
 
 `clean` removes local `dist/`.
 
-## V1 Boundaries
+`publish:preview` is intended for preview/test publishing. It assigns missing IDs, builds `dist/`, and writes preview results back to Notion. It does not deploy by itself; GitHub Actions handles preview deployment when explicitly enabled.
 
-V1 does not implement deployment, GitHub Actions, PDF automation, or any writes to target site repositories.
+## Preview GitHub Actions Publishing
+
+Preview publishing is test-only. Do not point it at production repositories or production Notion databases.
+
+Workflow:
+
+1. A user edits a document in Notion.
+2. The user sets `Status` to a publishable status, `Visibility` to an allowed visibility, and checks `Publish`.
+3. The `Preview Publish` GitHub Actions workflow runs manually, on schedule, or after code changes on `main`.
+4. The workflow assigns missing `DOC_ID` values, builds `dist/`, optionally deploys to this repository's GitHub Pages preview target, and writes results back to Notion.
+
+Required Notion write-back fields:
+
+| Field | Type |
+| --- | --- |
+| `PUBLISHED_URL` | `url` |
+| `PUBLISHED_AT` | `date` |
+| `BUILD_STATUS` | `select`: `pending`, `success`, `failed`, `skipped` |
+| `BUILD_MESSAGE` | `rich_text` |
+| `LAST_BUILD_RUN` | `rich_text` |
+
+Required GitHub secret:
+
+- `NOTION_TOKEN`
+
+Required GitHub variables or secrets:
+
+- `NOTION_DATABASE_ID`
+- `ALLOWED_VISIBILITY`
+- `PUBLISHABLE_STATUSES`
+- `BRAND_TOKENS_JSON`
+- `DOCUMENT_TYPE_TOKENS_JSON`
+- `PREVIEW_DEPLOY_ENABLED`
+- `PREVIEW_BASE_URL`
+
+Set `PREVIEW_DEPLOY_ENABLED=true` only for a test GitHub Pages target. `PREVIEW_BASE_URL` must be the public base URL, for example:
+
+```text
+https://enxpower.github.io/notion-doc-publisher-v3
+```
+
+Published URLs are written as:
+
+```text
+${PREVIEW_BASE_URL}/docs/{DOC_ID}/
+```
+
+If `PREVIEW_DEPLOY_ENABLED` is not `true`, the workflow builds and writes skipped preview messages to Notion but does not deploy.
+
+To run manually, open GitHub Actions, select `Preview Publish`, and choose `Run workflow`.
+
+## Boundaries
+
+v0.2.0 adds preview/test deployment only. It does not add PDF automation, approval workflow, production deployment, or writes to production repositories.

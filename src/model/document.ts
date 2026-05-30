@@ -90,6 +90,7 @@ export type DocumentModel = {
 export type BuildReport = {
   generatedAt: string;
   documents: Array<{
+    pageId: string;
     docId: string;
     title: string;
     path: string;

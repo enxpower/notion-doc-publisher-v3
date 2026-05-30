@@ -15,6 +15,11 @@ export type NotionBlock = {
   [key: string]: unknown;
 };
 
+export type NotionDatabase = {
+  id: string;
+  properties: Record<string, { type?: string; [key: string]: unknown }>;
+};
+
 export class NotionClient {
   constructor(private readonly config: AppConfig) {}
 
@@ -60,6 +65,17 @@ export class NotionClient {
           }
         }
       })
+    });
+  }
+
+  async retrieveDatabase(): Promise<NotionDatabase> {
+    return await this.request<NotionDatabase>(`/databases/${this.config.notionDatabaseId}`, { method: "GET" });
+  }
+
+  async updatePageProperties(pageId: string, properties: Record<string, unknown>): Promise<void> {
+    await this.request(`/pages/${pageId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ properties })
     });
   }
 
