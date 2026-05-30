@@ -118,6 +118,31 @@ If `PREVIEW_DEPLOY_ENABLED` is not `true`, the workflow builds and writes skippe
 
 To run manually, open GitHub Actions, select `Preview Publish`, and choose `Run workflow`.
 
+## Layout and Paper System
+
+The default document format is **US Letter**. Print output is defined by
+`@page { size: letter; }` in `styles/print.css` and must not be changed to A4.
+
+The register page (`.site-index`) and individual document pages (`.document`)
+share one **shared paper system** defined as CSS variables in
+`styles/screen.css`:
+
+| Variable | Purpose |
+| --- | --- |
+| `--paper-width` | Outer sheet width, shared by the register and documents |
+| `--paper-padding-x` / `--paper-padding-y` | Page margins |
+| `--document-measure` | Readable body column, narrower than the sheet |
+
+Page furniture — masthead, title block, metadata grid, and the register
+table — uses the full paper width. Long-form body text (paragraphs, lists,
+headings, quotes, callouts) is constrained to `--document-measure` so document
+pages stay readable and never feel excessively wide, while tables, figures, and
+code blocks may still use the full content width. The register and document
+pages therefore differ in content layout, not in paper size.
+
+`styles/screen.css` is loaded with `media="screen"` and `styles/print.css` with
+`media="print"`, so screen styling never affects printed/PDF output.
+
 ## Boundaries
 
 v0.2.0 adds preview/test deployment only. It does not add PDF automation, approval workflow, production deployment, or writes to production repositories.
