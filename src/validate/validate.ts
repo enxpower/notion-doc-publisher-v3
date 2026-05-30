@@ -47,16 +47,22 @@ export function validateDocuments(documents: DocumentModel[], config: AppConfig)
     }
 
     if (document.meta.publish && !config.publishableStatuses.has(document.meta.status)) {
-      errors.push(
+      warnings.push(
         issue(
           "INVALID_PUBLISH_STATUS",
-          `Publish is checked but Status "${document.meta.status}" is not configured as publishable.`,
+          `Publish is checked but Status "${document.meta.status}" is not configured as publishable; document will be skipped.`,
           document
         )
       );
     }
     if (document.meta.publish && !config.allowedVisibility.has(document.meta.visibility)) {
-      errors.push(issue("VISIBILITY_NOT_ALLOWED", `Visibility ${document.meta.visibility} is not allowed for this build target.`, document));
+      warnings.push(
+        issue(
+          "VISIBILITY_NOT_ALLOWED",
+          `Visibility "${document.meta.visibility}" is not allowed for this build target; document will be skipped.`,
+          document
+        )
+      );
     }
     if (publishable && !document.meta.docId) {
       errors.push(issue("MISSING_DOC_ID", "Publishable documents require DOC_ID. Run npm run assign-id first.", document));
