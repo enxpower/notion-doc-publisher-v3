@@ -30,9 +30,9 @@ a {
 
 .document,
 .site-index {
-  width: min(100% - 40px, 960px);
+  width: min(100% - 40px, 1100px);
   margin: 36px auto;
-  padding: 52px 50px 60px;
+  padding: 64px 72px;
   background: var(--paper);
   border: 1px solid #d2d6dc;
   border-radius: 2px;
