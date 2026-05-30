@@ -14,6 +14,10 @@
   --soft: #f7f8fa;
   --warning-bg: #fff8e5;
   --warning-line: #c9a449;
+  --paper-width: 1040px;
+  --paper-padding-x: 68px;
+  --paper-padding-y: 60px;
+  --document-measure: 880px;
   font-family: "Source Serif 4", Georgia, "Times New Roman", serif;
 }
 
@@ -30,17 +34,13 @@ a {
 
 .document,
 .site-index {
-  width: min(100% - 40px, 1040px);
+  width: min(100% - 40px, var(--paper-width));
   margin: 36px auto;
-  padding: 60px 68px;
+  padding: var(--paper-padding-y) var(--paper-padding-x);
   background: var(--paper);
   border: 1px solid #d2d6dc;
   border-radius: 2px;
   box-shadow: 0 18px 42px rgba(31, 38, 48, 0.12);
-}
-
-.site-index {
-  width: min(100% - 40px, 1060px);
 }
 
 .document-masthead {
@@ -139,6 +139,7 @@ figure {
 }
 
 .document-content {
+  max-width: var(--document-measure);
   padding-top: 10px;
   font-size: 16px;
 }
