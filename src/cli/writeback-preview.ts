@@ -1,5 +1,5 @@
 import fs from "node:fs/promises";
-import { loadConfigOrThrow, loadPreviewDeployConfig, runCli, UserFacingError } from "../config.js";
+import { loadConfigOrThrow, loadPreviewDeployConfig, runCli, UserFacingError, type AppConfig } from "../config.js";
 import type { BuildReport, ValidationIssue } from "../model/document.js";
 import { NotionWriteback } from "../notion/writeback.js";
 
@@ -43,7 +43,7 @@ await runCli(async () => {
       continue;
     }
 
-    const message = skipMessage(document, warningMessagesByPage.get(document.pageId));
+    const message = skipMessage(document, config, warningMessagesByPage.get(document.pageId));
     await writeback.updateDocumentSkipped(document.pageId, message, preview.runId);
   }
 
@@ -79,14 +79,20 @@ function groupIssues(issues: ValidationIssue[]): Map<string, string[]> {
   return grouped;
 }
 
-function skipMessage(document: ReportDocument, warnings: string[] | undefined): string {
-  if (warnings && warnings.length > 0) {
-    return warnings.join("; ");
-  }
+function skipMessage(document: ReportDocument, config: AppConfig, warnings: string[] | undefined): string {
   if (!document.publish) {
-    return "Skipped because Publish is not checked.";
+    return "Skipped: Publish is not checked.";
   }
-  return "Skipped because document was not included in preview build output.";
+  if (!config.publishableStatuses.has(document.status)) {
+    return `Skipped: Status "${document.status || "(empty)"}" is not configured for publishing.`;
+  }
+  if (!config.allowedVisibility.has(document.visibility)) {
+    return `Skipped: Visibility "${document.visibility || "(empty)"}" is not allowed for this build target.`;
+  }
+  if (warnings && warnings.length > 0) {
+    return `Skipped: ${warnings.join("; ")}`;
+  }
+  return "Skipped: document was not included in preview build output.";
 }
 
 function publishedUrl(baseUrl: string | undefined, docId: string): string {

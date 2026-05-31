@@ -118,6 +118,75 @@ If `PREVIEW_DEPLOY_ENABLED` is not `true`, the workflow builds and writes skippe
 
 To run manually, open GitHub Actions, select `Preview Publish`, and choose `Run workflow`.
 
+## Layout and US Letter
+
+The default document format is **US Letter**. Print output is defined by
+`@page { size: letter; }` in `styles/print.css` and must not be changed to A4.
+
+The register page (`.site-index`) and document pages (`.document`) share one
+**paper system** defined as CSS variables in `styles/screen.css`:
+
+| Variable | Purpose |
+| --- | --- |
+| `--paper-width` | Outer sheet width, shared by the register and documents |
+| `--paper-padding-x` / `--paper-padding-y` | Page margins |
+| `--document-measure` | Readable prose column, narrower than the sheet |
+
+Page furniture (masthead, title block, metadata, footer, register table) uses
+the full paper width. Long-form prose is constrained to `--document-measure`
+for a comfortable line length, while tables, figures, and code may break out to
+the full content width. The UI/furniture layer uses a system sans-serif; the
+document body uses a readable serif suitable for formal documents.
+
+## Branding (brand-neutral)
+
+The system supports documents for multiple companies. Branding is **not**
+hardcoded. The masthead brand comes from the Notion `Brand` value; an optional
+display name and tagline come from `config/brands.json`:
+
+```json
+{
+  "ARCBOS": { "displayName": "ARCBOS", "tagline": "ENGINEERED FOR EXTREME CONDITIONS" },
+  "ENERGIZE": { "displayName": "ENERGIZE", "tagline": "" },
+  "AGIM": { "displayName": "AGI&M", "tagline": "" }
+}
+```
+
+A brand's tagline is only shown when it is non-empty, so the ARCBOS slogan
+appears only for ARCBOS documents. Brands without a profile fall back to the
+raw Notion `Brand` label and show no tagline. The file is optional; if it is
+missing or malformed the masthead stays cleanly neutral. An alternate path can
+be set with `BRAND_PROFILES_PATH`. The file is committed and read at build
+time, so CI needs no additional secrets.
+
+## Printing
+
+Each document page includes a **Print / Save as PDF** button that calls
+`window.print()`. The print stylesheet (`styles/print.css`) renders a formal
+Letter-sized document: web-only chrome (`.document-actions`, `.no-print`) is
+hidden, the masthead and footer are preserved, headings avoid being stranded,
+and tables, images, and code are kept from clipping. Automated headless PDF
+export remains future work and is intentionally not part of this pass.
+
+## Validation severity
+
+Validation keeps publishing disciplined without letting one bad draft block
+everything:
+
+- A document **eligible for publishing** (Publish checked, publishable Status,
+  allowed Visibility) must pass validation; any error on such a document is
+  build-blocking.
+- **Cross-document integrity** errors (duplicate `DOC_ID`, output path
+  collision) are always build-blocking.
+- Quality problems on **drafts or non-publishable** documents are reported but
+  never block the valid, publishable documents from building and deploying.
+
+The build prints the exact title, `DOC_ID`, and reason for each blocking
+document. Per-document results are written back to Notion as `success`,
+`skipped` (with a concrete reason such as `Skipped: Status "Draft" is not
+configured for publishing.`), or `failed`.
+
 ## Boundaries
 
-v0.2.0 adds preview/test deployment only. It does not add PDF automation, approval workflow, production deployment, or writes to production repositories.
+v0.2.0 adds preview/test deployment only. It does not add PDF automation,
+approval workflow, production deployment, or writes to production repositories.

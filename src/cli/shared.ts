@@ -61,3 +61,57 @@ export async function writeJson(filePath: string, value: unknown): Promise<void>
 export function hasErrors(documents: DocumentModel[]): boolean {
   return documents.some((document) => document.validation.errors.length > 0);
 }
+
+/**
+ * Cross-document integrity errors that make output ambiguous and must halt the
+ * whole build regardless of which document carries them.
+ */
+const GLOBAL_ERROR_CODES = new Set(["DUPLICATE_DOC_ID", "OUTPUT_PATH_COLLISION"]);
+
+/**
+ * Decides whether the build must stop. Publishing discipline is preserved:
+ * any error on a document that is eligible for publishing still halts the
+ * build, as do cross-document integrity errors. Quality problems on drafts or
+ * otherwise non-publishable documents are reported but never block the valid,
+ * publishable documents from being built and deployed.
+ */
+export function hasBuildBlockingErrors(documents: DocumentModel[], config: AppConfig): boolean {
+  return documents.some((document) => {
+    if (document.validation.errors.length === 0) {
+      return false;
+    }
+    if (isPublishableCandidate(document, config)) {
+      return true;
+    }
+    return document.validation.errors.some((issue) => GLOBAL_ERROR_CODES.has(issue.code));
+  });
+}
+
+/**
+ * Returns the documents whose errors are actually blocking the build, paired
+ * with their human-readable reasons, for actionable console reporting.
+ */
+export function buildBlockers(
+  documents: DocumentModel[],
+  config: AppConfig
+): Array<{ title: string; docId: string; reasons: string[] }> {
+  const blockers: Array<{ title: string; docId: string; reasons: string[] }> = [];
+  for (const document of documents) {
+    if (document.validation.errors.length === 0) {
+      continue;
+    }
+    const publishable = isPublishableCandidate(document, config);
+    const blocking = document.validation.errors.filter(
+      (issue) => publishable || GLOBAL_ERROR_CODES.has(issue.code)
+    );
+    if (blocking.length === 0) {
+      continue;
+    }
+    blockers.push({
+      title: document.meta.title || "(untitled)",
+      docId: document.meta.docId || "(no DOC_ID)",
+      reasons: blocking.map((issue) => `${issue.code}: ${issue.message}`)
+    });
+  }
+  return blockers;
+}

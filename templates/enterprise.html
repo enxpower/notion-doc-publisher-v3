@@ -12,7 +12,7 @@
       <header class="document-masthead">
         <div class="masthead-row">
           <div class="masthead-brand">{{brand}}</div>
-          <div class="masthead-slogan">ENGINEERED FOR EXTREME CONDITIONS</div>
+          {{sloganBlock}}
         </div>
       </header>
       <section class="document-title-block">
@@ -30,9 +30,16 @@
           <div><dt>Visibility</dt><dd>{{visibility}}</dd></div>
         </dl>
       </section>
+      <div class="document-actions no-print">
+        <button type="button" class="action-print" onclick="window.print()">Print / Save as PDF</button>
+      </div>
       <section class="document-content">
         {{body}}
       </section>
+      <footer class="document-footer">
+        <span class="footer-brand">{{brand}}</span>
+        <span class="footer-ref">{{docId}} &middot; Version {{version}}</span>
+      </footer>
     </main>
   </body>
 </html>
