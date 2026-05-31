@@ -92,7 +92,8 @@ h1 {
 
 h2,
 h3,
-h4 {
+h4,
+h5 {
   break-after: avoid;
   page-break-after: avoid;
 }
@@ -112,6 +113,11 @@ h3 {
 h4 {
   margin-top: 6mm;
   font-size: 11pt;
+}
+
+h5 {
+  margin-top: 5mm;
+  font-size: 10pt;
 }
 
 p,
@@ -222,6 +228,12 @@ th {
   border-bottom: 0.25mm solid #555555;
 }
 
+/* Web-only chrome must never appear in print. */
+.no-print,
+.document-actions {
+  display: none !important;
+}
+
 ul,
 ol {
   margin: 0 0 3mm;
@@ -247,6 +259,24 @@ figcaption {
 .file-link a {
   font-family: Arial, Helvetica, sans-serif;
   font-size: 9pt;
+}
+
+.document-footer,
+.site-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 8mm;
+  margin-top: 8mm;
+  padding-top: 3mm;
+  border-top: 0.25mm solid #555555;
+  color: #555555;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 7pt;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  break-inside: avoid;
+  page-break-inside: avoid;
 }
 
 @media print {

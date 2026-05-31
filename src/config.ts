@@ -1,6 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
 
+export type BrandProfile = {
+  displayName: string;
+  tagline: string;
+};
+
 export type AppConfig = {
   notionToken: string;
   notionDatabaseId: string;
@@ -10,6 +15,7 @@ export type AppConfig = {
   publishableStatuses: Set<string>;
   brandTokens: Record<string, string>;
   documentTypeTokens: Record<string, string>;
+  brandProfiles: Record<string, BrandProfile>;
 };
 
 export type PreviewDeployConfig = {
@@ -37,8 +43,52 @@ export function loadConfig(): AppConfig {
     allowedVisibility: new Set(readListEnv("ALLOWED_VISIBILITY", "Public")),
     publishableStatuses: new Set(readRequiredListEnv("PUBLISHABLE_STATUSES")),
     brandTokens: readRequiredJsonMap("BRAND_TOKENS_JSON"),
-    documentTypeTokens: readRequiredJsonMap("DOCUMENT_TYPE_TOKENS_JSON")
+    documentTypeTokens: readRequiredJsonMap("DOCUMENT_TYPE_TOKENS_JSON"),
+    brandProfiles: readBrandProfiles()
   };
+}
+
+/**
+ * Brand presentation (display name + optional tagline) is intentionally
+ * separate from publishing logic. It is loaded from an optional, committed
+ * config file so the system stays brand-neutral by default and CI needs no
+ * extra secrets. A missing or malformed file falls back to no profiles, which
+ * renders a clean neutral masthead driven only by the Notion Brand value.
+ */
+function readBrandProfiles(): Record<string, BrandProfile> {
+  const candidates = [
+    cleanOptional(process.env.BRAND_PROFILES_PATH),
+    "config/brands.json"
+  ].filter((value): value is string => Boolean(value));
+
+  for (const candidate of candidates) {
+    try {
+      const filePath = path.resolve(process.cwd(), candidate);
+      if (!fs.existsSync(filePath)) {
+        continue;
+      }
+      const parsed = JSON.parse(fs.readFileSync(filePath, "utf8")) as unknown;
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        return {};
+      }
+      const result: Record<string, BrandProfile> = {};
+      for (const [brand, value] of Object.entries(parsed as Record<string, unknown>)) {
+        if (!value || typeof value !== "object" || Array.isArray(value)) {
+          continue;
+        }
+        const profile = value as Record<string, unknown>;
+        result[brand] = {
+          displayName: typeof profile.displayName === "string" ? profile.displayName : brand,
+          tagline: typeof profile.tagline === "string" ? profile.tagline : ""
+        };
+      }
+      return result;
+    } catch {
+      // A broken branding file should never break a build; fall back to neutral.
+      return {};
+    }
+  }
+  return {};
 }
 
 function loadDotEnv(): void {
