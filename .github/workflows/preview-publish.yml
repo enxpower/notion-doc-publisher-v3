@@ -67,10 +67,29 @@ jobs:
               exit 1
               ;;
           esac
-          if [ "${PREVIEW_DEPLOY_ENABLED}" = "true" ] && [ -z "${PREVIEW_BASE_URL}" ]; then
-            echo "PREVIEW_BASE_URL is required when PREVIEW_DEPLOY_ENABLED=true."
-            exit 1
+
+      - name: Resolve deployment settings
+        id: preview
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          enabled="$(printf '%s' "${PREVIEW_DEPLOY_ENABLED:-}" | tr '[:upper:]' '[:lower:]' | xargs)"
+          base_url="$(printf '%s' "${PREVIEW_BASE_URL:-}" | xargs)"
+
+          if [ "$enabled" = "true" ]; then
+            if [ -z "$base_url" ]; then
+              echo "PREVIEW_BASE_URL is required when PREVIEW_DEPLOY_ENABLED=true."
+              exit 1
+            fi
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            echo "Preview deployment enabled."
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "Preview deployment disabled."
           fi
+
+          echo "base_url=$base_url" >> "$GITHUB_OUTPUT"
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -90,11 +109,11 @@ jobs:
         run: npm run build
 
       - name: Configure GitHub Pages
-        if: env.PREVIEW_DEPLOY_ENABLED == 'true' && steps.build.outcome == 'success'
+        if: steps.preview.outputs.enabled == 'true' && steps.build.outcome == 'success'
         uses: actions/configure-pages@v5
 
       - name: Upload Pages artifact
-        if: env.PREVIEW_DEPLOY_ENABLED == 'true' && steps.build.outcome == 'success'
+        if: steps.preview.outputs.enabled == 'true' && steps.build.outcome == 'success'
         uses: actions/upload-pages-artifact@v3
         with:
           path: dist
@@ -102,11 +121,11 @@ jobs:
       - name: Deploy preview to GitHub Pages
         id: deploy
         continue-on-error: true
-        if: env.PREVIEW_DEPLOY_ENABLED == 'true' && steps.build.outcome == 'success'
+        if: steps.preview.outputs.enabled == 'true' && steps.build.outcome == 'success'
         uses: actions/deploy-pages@v4
 
       - name: Preview deployment skipped
-        if: env.PREVIEW_DEPLOY_ENABLED != 'true' && steps.build.outcome == 'success'
+        if: steps.preview.outputs.enabled != 'true' && steps.build.outcome == 'success'
         run: echo "PREVIEW_DEPLOY_ENABLED is not true. Built dist/ but skipped preview deployment."
 
       - name: Write results back to Notion
@@ -117,7 +136,7 @@ jobs:
         run: npm run ci:writeback
 
       - name: Fail workflow when build or deploy failed
-        if: steps.build.outcome != 'success' || (env.PREVIEW_DEPLOY_ENABLED == 'true' && steps.deploy.outcome != 'success')
+        if: steps.build.outcome != 'success' || (steps.preview.outputs.enabled == 'true' && steps.deploy.outcome != 'success')
         run: |
           echo "Preview publish failed during build or preview deployment. Notion write-back has been attempted."
           exit 1
