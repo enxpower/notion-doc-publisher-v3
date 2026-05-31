@@ -47,7 +47,7 @@ export type DocumentAsset = {
 
 export type DocumentBlock =
   | { type: "paragraph"; id: string; richText: RichTextSpan[] }
-  | { type: "heading_1" | "heading_2" | "heading_3" | "heading_4" | "heading_4"; id: string; richText: RichTextSpan[] }
+  | { type: "heading_1" | "heading_2" | "heading_3" | "heading_4"; id: string; richText: RichTextSpan[] }
   | { type: "bulleted_list_item" | "numbered_list_item"; id: string; richText: RichTextSpan[] }
   | { type: "quote" | "callout"; id: string; richText: RichTextSpan[] }
   | { type: "code"; id: string; richText: RichTextSpan[]; language?: string }
