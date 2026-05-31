@@ -183,19 +183,18 @@ a {
   text-transform: uppercase;
 }
 
-/* Fluid title: scales down for long / CJK titles, never giant or heavy.
-   `overflow-wrap` + `word-break` keep long unbroken CJK strings clean. */
+/* Fluid title: scales down for long / CJK titles, never giant or heavy. */
 h1 {
   margin: 0;
-  max-width: 24ch;
+  max-width: min(100%, 880px);
   font-family: var(--font-sans);
   font-size: clamp(25px, 1.4vw + 1.1rem, 34px);
   font-weight: 600;
   line-height: 1.24;
   letter-spacing: -0.01em;
-  overflow-wrap: anywhere;
-  word-break: break-word;
-  text-wrap: balance;
+  overflow-wrap: normal;
+  word-break: normal;
+  text-wrap: pretty;
 }
 
 h1:lang(zh) {
