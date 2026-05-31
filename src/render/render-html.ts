@@ -60,7 +60,7 @@ export function renderIndexHtml(documents: DocumentModel[], config?: AppConfig):
         <td>${escapeHtml(meta.client.label)}</td>
         <td>${escapeHtml(meta.documentType.label)}</td>
         <td>${escapeHtml(meta.version)}</td>
-        <td><span class="chip ${classification.cls}">${escapeHtml(classification.label)}</span></td>
+        <td><span class="tag ${classification.cls}">${escapeHtml(classification.label)}</span></td>
       </tr>`;
     })
     .join("\n");
@@ -127,10 +127,10 @@ function renderIdentity(
   if (type) facts.push(`<span>${escapeHtml(type)}</span>`);
   if (version) facts.push(`<span>Version ${escapeHtml(version)}</span>`);
   const factLine = facts.join(`<span class="identity-sep">·</span>`);
-  const chips: string[] = [];
-  if (status) chips.push(`<span class="chip status-chip status-${slugify(status)}">${escapeHtml(status)}</span>`);
-  chips.push(`<span class="chip ${classification.cls}">${escapeHtml(classification.label)}</span>`);
-  return `<div class="identity-facts">${factLine}</div><div class="identity-chips">${chips.join("")}</div>`;
+  const tags: string[] = [];
+  if (status) tags.push(`<span class="tag status-${slugify(status)}">${escapeHtml(status)}</span>`);
+  tags.push(`<span class="tag ${classification.cls}">${escapeHtml(classification.label)}</span>`);
+  return `<div class="identity-facts">${factLine}</div><div class="identity-tags">${tags.join("")}</div>`;
 }
 
 /**
@@ -154,15 +154,13 @@ function renderMetaStrip(client: string, project: string, updated: string): stri
 }
 
 /**
- * Temporary browser-print action. This intentionally uses the native
- * `window.print()` dialog and is clearly labeled as such. A controlled,
- * enterprise-grade PDF (custom header/footer, real page numbers, guaranteed
- * margins) is future work — see README "Printing" — and will be implemented
- * with a headless Playwright/Chromium pipeline, not client-side pagination.
+ * Compact, secondary print action. It opens the browser's native print dialog
+ * (the only print path in this build). The customer-facing label is simply
+ * "Print"; any explanation lives in the title/aria-label, never in visible body
+ * UI. Controlled PDF export is tracked as future work in the docs, not here.
  */
 function renderActions(): string {
-  return `<button type="button" class="action-btn" onclick="window.print()">Browser Print (temporary)</button>
-        <span class="action-note">Controlled PDF export is planned (Playwright). This button uses your browser's print dialog.</span>`;
+  return `<button type="button" class="action-btn" onclick="window.print()" title="Print this document using your browser" aria-label="Print this document">Print</button>`;
 }
 
 function renderToc(entries: TocEntry[]): string {

@@ -65,7 +65,7 @@ body {
 .masthead-slogan,
 .document-kicker,
 .identity-facts,
-.chip,
+.tag,
 dt {
   font-family: Arial, Helvetica, "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
 }
@@ -108,7 +108,7 @@ h1 {
   page-break-after: avoid;
 }
 
-/* Executive identity line + chips */
+/* Executive identity line + quiet status tags */
 .document-identity {
   display: flex;
   justify-content: space-between;
@@ -133,15 +133,17 @@ h1 {
   color: #999999;
 }
 
-.identity-chips .chip + .chip {
-  margin-left: 2mm;
+.identity-tags {
+  display: flex;
+  gap: 4mm;
 }
 
-.chip {
+.tag {
   font-size: 7pt;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
+  color: #555555;
 }
 
 h2,
@@ -211,7 +213,7 @@ dt {
 }
 
 dd {
-  margin: 1mm 0 0;
+  margin: 0;
   font-family: Arial, Helvetica, "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
   font-size: 9pt;
 }

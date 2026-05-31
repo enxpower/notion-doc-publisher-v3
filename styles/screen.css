@@ -79,9 +79,10 @@ a {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 12px clamp(18px, 5vw, 48px);
-  background: rgba(255, 255, 255, 0.9);
-  backdrop-filter: saturate(1.1) blur(6px);
+  height: 56px;
+  padding: 0 clamp(20px, 5vw, 52px);
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: saturate(1.1) blur(8px);
   border-bottom: 1px solid var(--line);
   font-family: var(--font-sans);
 }
@@ -89,22 +90,37 @@ a {
 .topbar-brand {
   font-size: 13px;
   font-weight: 700;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
   text-decoration: none;
   color: var(--text);
 }
 
 .topbar-link {
-  font-size: 12px;
+  position: relative;
+  font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
   text-decoration: none;
   color: var(--muted);
+  padding-left: 18px;
+}
+
+/* subtle leading divider so the link reads as intentional nav, not stray text */
+.topbar-link::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 1px;
+  height: 14px;
+  transform: translateY(-50%);
+  background: var(--line);
 }
 
 .topbar-link:hover {
-  color: var(--brand-accent);
+  color: var(--text);
 }
 
 /* ---- shared paper sheet ----------------------------------- */
@@ -154,7 +170,7 @@ a {
 
 /* ---- title block + executive identity --------------------- */
 .document-title-block {
-  padding: 32px 0 0;
+  padding: 30px 0 0;
 }
 
 .document-kicker {
@@ -167,23 +183,35 @@ a {
   text-transform: uppercase;
 }
 
+/* Fluid title: scales down for long / CJK titles, never giant or heavy.
+   `overflow-wrap` + `word-break` keep long unbroken CJK strings clean. */
 h1 {
   margin: 0;
+  max-width: 24ch;
   font-family: var(--font-sans);
-  font-size: 38px;
+  font-size: clamp(25px, 1.4vw + 1.1rem, 34px);
   font-weight: 600;
-  line-height: 1.1;
-  letter-spacing: -0.015em;
+  line-height: 1.24;
+  letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  text-wrap: balance;
 }
 
+h1:lang(zh) {
+  letter-spacing: 0;
+}
+
+/* Refined identity / meta bar: facts on the left, quiet status tags on the
+   right — one cohesive line, not floating UI. */
 .document-identity {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 12px 20px;
-  margin-top: 20px;
-  padding-top: 16px;
+  gap: 8px 20px;
+  margin-top: 18px;
+  padding-top: 14px;
   border-top: 1px solid var(--line);
 }
 
@@ -193,103 +221,104 @@ h1 {
   align-items: center;
   gap: 8px;
   font-family: var(--font-sans);
-  font-size: 13px;
+  font-size: 12.5px;
   color: var(--muted);
 }
 
 .identity-id {
   font-weight: 700;
-  letter-spacing: 0.06em;
-  color: var(--brand-accent);
+  letter-spacing: 0.05em;
+  color: var(--text);
 }
 
 .identity-sep {
   color: var(--faint);
 }
 
-.identity-chips {
+.identity-tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  align-items: center;
+  gap: 16px;
 }
 
-/* ---- chips ------------------------------------------------- */
-.chip {
+/* ---- quiet status / classification tags -------------------
+   Premium, understated: a small status dot + muted small-caps label.
+   No filled pill, no border, no loud color. The dot carries state. */
+.tag {
   display: inline-flex;
   align-items: center;
-  padding: 3px 10px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: var(--soft);
+  gap: 6px;
   font-family: var(--font-sans);
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 600;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
   color: var(--muted);
   white-space: nowrap;
 }
 
-.status-chip {
-  border-color: var(--strong-line);
-  color: var(--text);
+.tag::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--faint);
+  flex: none;
 }
 
-.status-final {
-  border-color: var(--brand-accent);
-  color: var(--brand-accent);
+.status-final::before {
+  background: var(--brand-accent);
 }
 
-.is-confidential {
-  border-color: #b4453a;
-  background: #fdecea;
-  color: #9c372e;
+.is-public::before {
+  background: #5a9b73;
 }
 
-.is-internal {
-  border-color: #c9a449;
-  background: #fff8e5;
-  color: #8a6d1f;
+.is-internal::before {
+  background: #c9a449;
 }
 
-.is-public {
-  border-color: #4a8a63;
-  background: #eef6f0;
-  color: #2f6b46;
+.is-confidential::before {
+  background: #b4453a;
 }
 
-/* ---- executive metadata strip ----------------------------- */
+/* ---- executive metadata strip -----------------------------
+   Compact inline label/value pairs; subtle labels, clear values,
+   minimal vertical weight so it never dominates the first page. */
 .document-summary {
-  margin-top: 22px;
-  padding-top: 18px;
-  border-top: 1px solid var(--line);
+  margin-top: 14px;
+  padding-bottom: 16px;
   border-bottom: 1px solid var(--line);
-  padding-bottom: 18px;
 }
 
 .document-meta {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px 28px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 36px;
   margin: 0;
 }
 
 .document-meta div {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
   min-width: 0;
 }
 
 dt {
   color: var(--faint);
   font-family: var(--font-sans);
-  font-size: 9.5px;
+  font-size: 10px;
   font-weight: 700;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.09em;
   text-transform: uppercase;
 }
 
 dd {
-  margin: 5px 0 0;
+  margin: 0;
   font-family: var(--font-sans);
-  font-size: 14.5px;
+  font-size: 13.5px;
   font-weight: 500;
   color: var(--text);
 }
@@ -298,34 +327,35 @@ dd {
   color: var(--faint);
 }
 
-/* ---- actions (web only) ----------------------------------- */
+/* ---- actions (web only) -----------------------------------
+   Compact, secondary, right-aligned so it does not interrupt the
+   masthead → title → meta flow. */
 .document-actions {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px 14px;
-  margin-top: 18px;
+  justify-content: flex-end;
+  margin-top: 14px;
 }
 
 .action-btn {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 16px;
-  border: 1px solid var(--brand-accent);
+  padding: 6px 14px;
+  border: 1px solid var(--line);
   border-radius: 6px;
   background: #fff;
-  color: var(--brand-accent);
+  color: var(--muted);
   font-family: var(--font-sans);
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 600;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.04em;
   cursor: pointer;
-  transition: background 0.15s ease;
+  transition: border-color 0.15s ease, color 0.15s ease;
 }
 
 .action-btn:hover {
-  background: var(--soft);
+  border-color: var(--strong-line);
+  color: var(--text);
 }
 
 .action-btn:focus-visible {
@@ -333,31 +363,25 @@ dd {
   outline-offset: 2px;
 }
 
-.action-note {
-  font-family: var(--font-sans);
-  font-size: 11px;
-  color: var(--faint);
-}
-
-/* ---- table of contents ------------------------------------ */
+/* ---- table of contents ------------------------------------
+   A light navigation aid, not a callout box: hairline top rule,
+   no fill, restrained type. Two columns when there is room so long
+   agreements stay compact and readable. */
 .document-toc {
-  margin-top: 28px;
-  padding: 18px 22px;
-  border: 1px solid var(--line);
-  border-left: 3px solid var(--brand-accent);
-  border-radius: 3px;
-  background: var(--soft);
+  margin: 30px 0;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
   max-width: var(--document-measure);
 }
 
 .toc-title {
-  margin: 0 0 10px;
+  margin: 0 0 12px;
   font-family: var(--font-sans);
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--muted);
+  color: var(--faint);
 }
 
 .toc-list {
@@ -365,32 +389,39 @@ dd {
   padding: 0;
   list-style: none;
   font-family: var(--font-sans);
-  font-size: 13.5px;
+  font-size: 13px;
+  columns: 2;
+  column-gap: 40px;
 }
 
 .toc-list li {
-  margin: 4px 0;
+  margin: 0 0 7px;
+  break-inside: avoid;
 }
 
 /* Indentation is relative to the shallowest heading present (toc-d0 = top). */
 .toc-list .toc-d1 {
-  padding-left: 18px;
-  font-size: 13px;
+  padding-left: 16px;
 }
 
 .toc-list .toc-d2 {
-  padding-left: 36px;
-  font-size: 13px;
+  padding-left: 32px;
 }
 
 .toc-list a {
   text-decoration: none;
-  color: var(--text);
+  color: var(--muted);
+  transition: color 0.12s ease;
 }
 
 .toc-list a:hover {
   color: var(--brand-accent);
-  text-decoration: underline;
+}
+
+@media (max-width: 680px) {
+  .toc-list {
+    columns: 1;
+  }
 }
 
 /* ============================================================
