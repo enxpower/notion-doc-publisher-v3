@@ -156,6 +156,7 @@ function blocksToDocumentBlocks(blocks: NotionBlock[], pageId: string, warnings:
       case "heading_2":
       case "heading_3":
       case "heading_4":
+      case "heading_4":
       case "bulleted_list_item":
       case "numbered_list_item":
       case "quote":
