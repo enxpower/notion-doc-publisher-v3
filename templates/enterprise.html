@@ -3,36 +3,37 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{{title}} - {{docId}}</title>
+    <title>{{title}} — {{docId}}</title>
     <link rel="stylesheet" href="{{screenCss}}">
     <link rel="stylesheet" href="{{printCss}}" media="print">
   </head>
   <body>
+    {{topbar}}
     <main class="document">
       <header class="document-masthead">
         <div class="masthead-row">
           <div class="masthead-brand">{{brand}}</div>
-          <div class="masthead-slogan">ENGINEERED FOR EXTREME CONDITIONS</div>
+          {{sloganBlock}}
         </div>
       </header>
       <section class="document-title-block">
-        <p class="document-id">{{docId}}</p>
         <p class="document-kicker">{{documentType}}</p>
         <h1>{{title}}</h1>
+        <div class="document-identity">{{identity}}</div>
       </section>
       <section class="document-summary" aria-label="Document metadata">
-        <dl class="document-meta">
-          <div><dt>Version</dt><dd>{{version}}</dd></div>
-          <div><dt>Client</dt><dd>{{client}}</dd></div>
-          <div><dt>Project</dt><dd>{{project}}</dd></div>
-          <div><dt>Type</dt><dd>{{documentType}}</dd></div>
-          <div><dt>Status</dt><dd>{{status}}</dd></div>
-          <div><dt>Visibility</dt><dd>{{visibility}}</dd></div>
-        </dl>
+        {{metaStrip}}
       </section>
+      <div class="document-actions no-print">
+        {{actions}}
+      </div>
+      {{toc}}
       <section class="document-content">
         {{body}}
       </section>
+      <footer class="document-footer">
+        {{footer}}
+      </footer>
     </main>
   </body>
 </html>
