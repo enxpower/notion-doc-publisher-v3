@@ -1,3 +1,19 @@
+/* ============================================================
+   Print styles — simple and conservative.
+
+   Default document format is US Letter — do not change to A4.
+   This stylesheet intentionally does NOT attempt running headers,
+   running footers, or "Page X of Y": those require CSS Paged
+   Media margin boxes that browsers do not support natively, and
+   the rejected Paged.js approach produced broken output. A
+   controlled, paginated PDF (custom header/footer, real page
+   numbers, guaranteed margins) is future work using a headless
+   Playwright/Chromium pipeline — see README.
+
+   This file's job is only to make the ordinary browser print
+   ("Save as PDF") of a single document look clean and formal.
+   ============================================================ */
+
 @page {
   size: letter;
   margin: 18mm;
@@ -7,11 +23,20 @@
   box-shadow: none !important;
 }
 
+/* Web-only chrome must never appear in print. */
+.no-print,
+.site-topbar,
+.document-actions,
+.document-toc {
+  display: none !important;
+}
+
 body {
   margin: 0;
   background: #ffffff;
   color: #000000;
-  font: 10.5pt/1.48 Georgia, "Times New Roman", serif;
+  /* Latin serif first, then system CJK serif fallbacks for Chinese contracts. */
+  font: 10.5pt/1.5 Georgia, "Times New Roman", "Songti SC", "SimSun", "Noto Serif CJK SC", serif;
 }
 
 .document,
@@ -26,7 +51,7 @@ body {
 
 .document-masthead {
   padding-bottom: 4mm;
-  border-bottom: 0.25mm solid #555555;
+  border-bottom: 0.4mm solid #333333;
 }
 
 .masthead-row {
@@ -39,9 +64,10 @@ body {
 .masthead-brand,
 .masthead-slogan,
 .document-kicker,
-.document-id,
+.identity-facts,
+.chip,
 dt {
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: Arial, Helvetica, "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
 }
 
 .masthead-brand {
@@ -61,15 +87,7 @@ dt {
 }
 
 .document-title-block {
-  padding: 8mm 0 6mm;
-  border-bottom: 0.2mm solid #b8b8b8;
-}
-
-.document-id {
-  margin: 0 0 3mm;
-  font-size: 8pt;
-  font-weight: 700;
-  letter-spacing: 0.08em;
+  padding: 8mm 0 0;
 }
 
 .document-kicker {
@@ -88,6 +106,42 @@ h1 {
   font-weight: 600;
   break-after: avoid;
   page-break-after: avoid;
+}
+
+/* Executive identity line + chips */
+.document-identity {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 6mm;
+  margin-top: 4mm;
+  padding-top: 3mm;
+  border-top: 0.2mm solid #b8b8b8;
+}
+
+.identity-facts {
+  font-size: 8pt;
+  color: #555555;
+}
+
+.identity-id {
+  font-weight: 700;
+}
+
+.identity-sep {
+  margin: 0 1.5mm;
+  color: #999999;
+}
+
+.identity-chips .chip + .chip {
+  margin-left: 2mm;
+}
+
+.chip {
+  font-size: 7pt;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 h2,
@@ -129,13 +183,17 @@ blockquote,
   widows: 3;
 }
 
+/* Executive metadata strip */
+.document-summary {
+  padding: 5mm 0 7mm;
+  border-bottom: 0.2mm solid #b8b8b8;
+}
+
 .document-meta {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
   gap: 3mm 7mm;
   margin: 0;
-  padding: 5mm 0 7mm;
-  border-bottom: 0.2mm solid #b8b8b8;
 }
 
 .document-meta div {
@@ -154,6 +212,18 @@ dt {
 
 dd {
   margin: 1mm 0 0;
+  font-family: Arial, Helvetica, "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+  font-size: 9pt;
+}
+
+ul,
+ol {
+  margin: 0 0 3mm;
+  padding-left: 6mm;
+}
+
+li {
+  margin: 0 0 1mm;
 }
 
 a {
@@ -169,6 +239,18 @@ pre {
   page-break-inside: avoid;
 }
 
+blockquote {
+  padding-left: 4mm;
+  border-left: 0.4mm solid #555555;
+  font-style: italic;
+}
+
+.callout,
+.block-warning {
+  padding: 2mm 3mm;
+  border: 0.2mm solid #999999;
+}
+
 pre {
   white-space: pre-wrap;
   padding: 3mm;
@@ -176,6 +258,11 @@ pre {
   background: #ffffff;
   color: #000000;
   font-size: 8pt;
+}
+
+code {
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.92em;
 }
 
 img {
@@ -188,6 +275,18 @@ img {
 figure {
   break-inside: avoid;
   page-break-inside: avoid;
+}
+
+figcaption {
+  margin-top: 2mm;
+  color: #555555;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 8pt;
+}
+
+.file-link a {
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 9pt;
 }
 
 .table-wrap {
@@ -223,60 +322,36 @@ th {
   text-transform: uppercase;
 }
 
-.register-header {
-  padding-bottom: 5mm;
-  border-bottom: 0.25mm solid #555555;
-}
-
-/* Web-only chrome must never appear in print. */
-.no-print,
-.document-actions {
-  display: none !important;
-}
-
-ul,
-ol {
-  margin: 0 0 3mm;
-  padding-left: 6mm;
-}
-
-li {
-  margin: 0 0 1mm;
-}
-
-code {
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-  font-size: 0.92em;
-}
-
-figcaption {
-  margin-top: 2mm;
+/* Footer + legal notice */
+.document-footer {
+  margin-top: 8mm;
+  padding-top: 3mm;
+  border-top: 0.4mm solid #333333;
   color: #555555;
   font-family: Arial, Helvetica, sans-serif;
-  font-size: 8pt;
+  break-inside: avoid;
+  page-break-inside: avoid;
 }
 
-.file-link a {
-  font-family: Arial, Helvetica, sans-serif;
-  font-size: 9pt;
-}
-
-.document-footer,
-.site-footer {
+.footer-row {
   display: flex;
   justify-content: space-between;
   gap: 8mm;
-  margin-top: 8mm;
-  padding-top: 3mm;
-  border-top: 0.25mm solid #555555;
-  color: #555555;
-  font-family: Arial, Helvetica, sans-serif;
   font-size: 7pt;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  break-inside: avoid;
-  page-break-inside: avoid;
+}
+
+.footer-notice {
+  margin: 2mm 0 0;
+  font-size: 7pt;
+  color: #777777;
+}
+
+.register-header {
+  padding-bottom: 5mm;
+  border-bottom: 0.4mm solid #333333;
 }
 
 @media print {
