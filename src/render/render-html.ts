@@ -157,7 +157,7 @@ function renderMetaStrip(client: string, project: string, updated: string): stri
  * Compact, secondary print action. It opens the browser's native print dialog
  * (the only print path in this build). The customer-facing label is simply
  * "Print"; any explanation lives in the title/aria-label, never in visible body
- * UI. Controlled PDF export is tracked as future work in the docs, not here.
+ * UI.
  */
 function renderActions(): string {
   return `<button type="button" class="action-btn" onclick="window.print()" title="Print this document using your browser" aria-label="Print this document">Print</button>`;

@@ -166,8 +166,7 @@ Each document page includes a **Print / Save as PDF** button that calls
 `window.print()`. The print stylesheet (`styles/print.css`) renders a formal
 Letter-sized document: web-only chrome (`.document-actions`, `.no-print`) is
 hidden, the masthead and footer are preserved, headings avoid being stranded,
-and tables, images, and code are kept from clipping. Automated headless PDF
-export remains future work and is intentionally not part of this pass.
+and tables, images, and code are kept from clipping.
 
 ## Validation severity
 

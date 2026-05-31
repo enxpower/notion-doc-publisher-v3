@@ -2,14 +2,6 @@
    Print styles — simple and conservative.
 
    Default document format is US Letter — do not change to A4.
-   This stylesheet intentionally does NOT attempt running headers,
-   running footers, or "Page X of Y": those require CSS Paged
-   Media margin boxes that browsers do not support natively, and
-   the rejected Paged.js approach produced broken output. A
-   controlled, paginated PDF (custom header/footer, real page
-   numbers, guaranteed margins) is future work using a headless
-   Playwright/Chromium pipeline — see README.
-
    This file's job is only to make the ordinary browser print
    ("Save as PDF") of a single document look clean and formal.
    ============================================================ */
