@@ -17,6 +17,9 @@ export function renderBlocks(blocks: DocumentBlock[], mode: "draft" | "publishab
       case "heading_3":
         html.push(`<h4>${renderRichText(block.richText)}</h4>`);
         break;
+      case "heading_4":
+        html.push(`<h5>${renderRichText(block.richText)}</h5>`);
+        break;
       case "bulleted_list_item": {
         const items: string[] = [];
         while (index < blocks.length && blocks[index]!.type === "bulleted_list_item") {
