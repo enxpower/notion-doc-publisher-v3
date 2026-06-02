@@ -1,8 +1,11 @@
 import type { AppConfig } from "../config.js";
 import { DOC_ID_PATTERN, parseDocId } from "../doc-id/generator.js";
 import type { DocumentModel, RichTextSpan, ValidationIssue } from "../model/document.js";
+import { VALID_PRIVATE_LINK_NAMESPACES, normalizeVisibility, isPrivateLinkVisibility } from "../model/document.js";
 
 const VERSION_PATTERN = /^v[0-9]+\.[0-9]+$/;
+const SHARE_TOKEN_VALID = /^[a-z0-9]{10,}$/;
+const SHARE_TOKEN_WARN_LENGTH = 12;
 const SAFE_URL_PROTOCOLS = new Set(["http:", "https:", "mailto:"]);
 
 export function validateDocuments(documents: DocumentModel[], config: AppConfig): DocumentModel[] {
@@ -55,7 +58,11 @@ export function validateDocuments(documents: DocumentModel[], config: AppConfig)
         )
       );
     }
-    if (document.meta.publish && !config.allowedVisibility.has(document.meta.visibility)) {
+    if (
+      document.meta.publish &&
+      !isPrivateLinkVisibility(document.meta.visibility) &&
+      !config.allowedVisibility.has(document.meta.visibility)
+    ) {
       warnings.push(
         issue(
           "VISIBILITY_NOT_ALLOWED",
@@ -64,6 +71,70 @@ export function validateDocuments(documents: DocumentModel[], config: AppConfig)
         )
       );
     }
+
+    const v = normalizeVisibility(document.meta.visibility);
+    if (isPrivateLinkVisibility(document.meta.visibility)) {
+      if (!document.meta.shareToken) {
+        const canAutoGenerate = config.autoGenerateShareToken || config.allowMissingShareToken;
+        const visLabel = v === "client" ? "Client" : v === "internal" ? "Internal" : "Unlisted";
+        const tokenIssue = issue(
+          "SHARE_TOKEN_REQUIRED",
+          canAutoGenerate
+            ? `${visLabel} document has no Share Token; one will be generated and written to Notion automatically.`
+            : `${visLabel} documents require a Share Token (Notion property: 'Share Token'). Set AUTO_GENERATE_SHARE_TOKEN=true to auto-generate a stable token.`,
+          document
+        );
+        if (canAutoGenerate) warnings.push(tokenIssue);
+        else errors.push(tokenIssue);
+      } else if (!SHARE_TOKEN_VALID.test(document.meta.shareToken)) {
+        errors.push(issue(
+          "INVALID_SHARE_TOKEN",
+          `Share Token "${document.meta.shareToken}" is invalid. Must be at least 10 lowercase alphanumeric characters (a-z, 0-9).`,
+          document
+        ));
+      } else if (document.meta.shareToken.length < SHARE_TOKEN_WARN_LENGTH) {
+        warnings.push(issue(
+          "SHORT_SHARE_TOKEN",
+          `Share Token "${document.meta.shareToken}" is valid but short (${document.meta.shareToken.length} chars). Recommended minimum is ${SHARE_TOKEN_WARN_LENGTH} characters for adequate entropy.`,
+          document
+        ));
+      }
+
+      if (v === "unlisted") {
+        if (!document.meta.privateLinkNamespace) {
+          warnings.push(issue(
+            "MISSING_PRIVATE_LINK_NAMESPACE",
+            config.autoFillPrivateNamespace
+              ? "Unlisted document has no Private Link Namespace; it will be inferred and written to Notion automatically."
+              : "Unlisted document has no Private Link Namespace; defaulting to 'clients' in memory.",
+            document
+          ));
+        } else if (!VALID_PRIVATE_LINK_NAMESPACES.has(document.meta.privateLinkNamespace)) {
+          errors.push(issue(
+            "INVALID_PRIVATE_LINK_NAMESPACE",
+            `Private Link Namespace "${document.meta.privateLinkNamespace}" is not supported. Valid values: clients, partners, internal.`,
+            document
+          ));
+        }
+      } else if (v === "client") {
+        if (document.meta.privateLinkNamespace && document.meta.privateLinkNamespace !== "clients") {
+          warnings.push(issue(
+            "PRIVATE_LINK_NAMESPACE_MISMATCH",
+            `Client documents use namespace "clients"; Private Link Namespace "${document.meta.privateLinkNamespace}" will be ignored.`,
+            document
+          ));
+        }
+      } else if (v === "internal") {
+        if (document.meta.privateLinkNamespace && document.meta.privateLinkNamespace !== "internal") {
+          warnings.push(issue(
+            "PRIVATE_LINK_NAMESPACE_MISMATCH",
+            `Internal documents use namespace "internal"; Private Link Namespace "${document.meta.privateLinkNamespace}" will be ignored.`,
+            document
+          ));
+        }
+      }
+    }
+
     if (publishable && !document.meta.docId) {
       errors.push(issue("MISSING_DOC_ID", "Publishable documents require DOC_ID. Run npm run assign-id first.", document));
     }
@@ -114,11 +185,18 @@ export function validateDocuments(documents: DocumentModel[], config: AppConfig)
 }
 
 export function isPublishableCandidate(document: DocumentModel, config: AppConfig): boolean {
-  return (
-    document.meta.publish &&
-    config.publishableStatuses.has(document.meta.status) &&
-    config.allowedVisibility.has(document.meta.visibility)
-  );
+  if (!document.meta.publish || !config.publishableStatuses.has(document.meta.status)) {
+    return false;
+  }
+  // Private-link documents (Client, Internal, Unlisted) always generate pages regardless of allowedVisibility
+  if (isPrivateLinkVisibility(document.meta.visibility)) {
+    return true;
+  }
+  return config.allowedVisibility.has(document.meta.visibility);
+}
+
+export function isPublicIndexListed(document: DocumentModel): boolean {
+  return document.meta.visibility.trim().toLowerCase() === "public" && document.meta.portalListed;
 }
 
 export function collectIssues(documents: DocumentModel[]): { errors: ValidationIssue[]; warnings: ValidationIssue[] } {

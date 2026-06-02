@@ -16,6 +16,14 @@ export type AppConfig = {
   brandTokens: Record<string, string>;
   documentTypeTokens: Record<string, string>;
   brandProfiles: Record<string, BrandProfile>;
+  registerPublic: boolean;
+  robotsDisallowDocs: boolean;
+  allowMissingShareToken: boolean;
+  legacyUnlistedDocsPath: boolean;
+  autoGenerateShareToken: boolean;
+  autoFillPrivateNamespace: boolean;
+  autoFillPortalCategory: boolean;
+  legacyPrivateDocIdUrls: boolean;
 };
 
 export type PreviewDeployConfig = {
@@ -44,7 +52,15 @@ export function loadConfig(): AppConfig {
     publishableStatuses: new Set(readRequiredListEnv("PUBLISHABLE_STATUSES")),
     brandTokens: readRequiredJsonMap("BRAND_TOKENS_JSON"),
     documentTypeTokens: readRequiredJsonMap("DOCUMENT_TYPE_TOKENS_JSON"),
-    brandProfiles: readBrandProfiles()
+    brandProfiles: readBrandProfiles(),
+    registerPublic: process.env.DOCUMENT_REGISTER_PUBLIC === "true",
+    robotsDisallowDocs: process.env.ROBOTS_DISALLOW_DOCS === "true",
+    allowMissingShareToken: process.env.ALLOW_MISSING_SHARE_TOKEN === "true",
+    legacyUnlistedDocsPath: process.env.LEGACY_UNLISTED_DOCS_PATH === "true",
+    autoGenerateShareToken: process.env.AUTO_GENERATE_SHARE_TOKEN !== "false",
+    autoFillPrivateNamespace: process.env.AUTO_FILL_PRIVATE_NAMESPACE !== "false",
+    autoFillPortalCategory: process.env.AUTO_FILL_PORTAL_CATEGORY !== "false",
+    legacyPrivateDocIdUrls: process.env.LEGACY_PRIVATE_DOC_ID_URLS === "true"
   };
 }
 

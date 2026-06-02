@@ -1,6 +1,6 @@
 import type { AppConfig } from "../config.js";
 import type { DocumentBlock, DocumentModel, RichTextSpan, ValidationIssue } from "../model/document.js";
-import { emptyValidation } from "../model/document.js";
+import { emptyValidation, VALID_PRIVATE_LINK_NAMESPACES, VALID_PORTAL_CATEGORIES, normalizeVisibility } from "../model/document.js";
 import type { NotionBlock, NotionPage } from "./client.js";
 
 type PropertyValue = Record<string, unknown>;
@@ -19,6 +19,11 @@ export function pageToDocument(page: NotionPage, blocks: NotionBlock[], config: 
   const status = readSelect(page.properties.Status as PropertyValue | undefined, "Status", errors);
   const visibility = readSelect(page.properties.Visibility as PropertyValue | undefined, "Visibility", errors);
   const publish = readCheckbox(page.properties.Publish as PropertyValue | undefined, "Publish", errors);
+  const portalListed = readOptionalCheckbox(page.properties["Portal Listed"] as PropertyValue | undefined);
+  const shareToken = readOptionalRichText(page.properties["Share Token"] as PropertyValue | undefined);
+  const privateLinkNamespace = readOptionalSelect(page.properties["Private Link Namespace"] as PropertyValue | undefined);
+  const category = readOptionalSelect(page.properties.Category as PropertyValue | undefined);
+  const portalCategory = readOptionalSelect(page.properties["Portal Category"] as PropertyValue | undefined);
 
   const brandToken = brandLabel ? config.brandTokens[brandLabel] : undefined;
   const typeToken = documentTypeLabel ? config.documentTypeTokens[documentTypeLabel] : undefined;
@@ -31,7 +36,7 @@ export function pageToDocument(page: NotionPage, blocks: NotionBlock[], config: 
 
   const content = blocksToDocumentBlocks(blocks, page.id, warnings);
   const assets = content.flatMap((block) => ("asset" in block ? [block.asset] : []));
-  const canonicalPath = docId ? `/docs/${docId}/` : "";
+  const canonicalPath = computeCanonicalPath(visibility, docId, shareToken, privateLinkNamespace);
 
   const document: DocumentModel = {
     meta: {
@@ -45,6 +50,11 @@ export function pageToDocument(page: NotionPage, blocks: NotionBlock[], config: 
       status,
       visibility,
       publish,
+      portalListed,
+      shareToken,
+      privateLinkNamespace,
+      category,
+      portalCategory,
       canonicalPath
     },
     content,
@@ -145,6 +155,78 @@ function readCheckbox(property: PropertyValue | undefined, name: string, errors:
   }
   return property.checkbox === true;
 }
+
+function readOptionalCheckbox(property: PropertyValue | undefined): boolean {
+  return property?.type === "checkbox" && property.checkbox === true;
+}
+
+function readOptionalRichText(property: PropertyValue | undefined): string {
+  if (!property || property.type !== "rich_text") return "";
+  return richTextToPlain(property.rich_text).trim();
+}
+
+function readOptionalSelect(property: PropertyValue | undefined): string {
+  if (!property || property.type !== "select") return "";
+  const select = property.select as { name?: string } | null | undefined;
+  return select?.name?.trim() ?? "";
+}
+
+// Backward-compat alias — prefer VALID_PRIVATE_LINK_NAMESPACES from model/document.ts
+export { VALID_PRIVATE_LINK_NAMESPACES as VALID_NAMESPACES } from "../model/document.js";
+
+export function computeCanonicalPath(
+  visibility: string,
+  docId: string,
+  shareToken: string,
+  privateLinkNamespace: string
+): string {
+  if (!docId) return "";
+  const v = normalizeVisibility(visibility);
+  if (v === "client") {
+    return shareToken ? `/clients/${shareToken}/` : "";
+  }
+  if (v === "internal") {
+    return shareToken ? `/internal/${shareToken}/` : "";
+  }
+  if (v === "unlisted") {
+    if (!shareToken) return "";
+    const ns = VALID_PRIVATE_LINK_NAMESPACES.has(privateLinkNamespace) ? privateLinkNamespace : "clients";
+    return `/${ns}/${shareToken}/`;
+  }
+  return `/docs/${docId}/`;
+}
+
+export function inferPrivateLinkNamespace(clientLabel: string, category: string, documentTypeLabel: string): string {
+  const cl = clientLabel.trim().toLowerCase();
+  const cat = category.trim().toLowerCase();
+  const dt = documentTypeLabel.trim().toLowerCase();
+  if (cl === "internal" || cl.includes("内部")) return "internal";
+  if (cat.includes("内部管理") || cat.includes("internal") || cat.includes("admin")) return "internal";
+  if (dt.includes("agreement") && cl !== "internal") return "partners";
+  if (cat.includes("合作") || cat.includes("渠道") || cat.includes("供应商") || cat.includes("partner")) return "partners";
+  return "clients";
+}
+
+export function inferPortalCategory(documentTypeLabel: string, category: string, brand: string, project: string): string {
+  const dt = documentTypeLabel.trim().toLowerCase();
+  const cat = category.trim().toLowerCase();
+  const bp = `${brand} ${project}`.toLowerCase();
+  if (dt.includes("report")) return "Reports";
+  if (dt.includes("specification") || dt.includes("spec") || dt.includes("guide")) return "Technical";
+  if (dt.includes("agreement")) return "Partners";
+  if (dt.includes("proposal")) return "Investor";
+  if (dt.includes("memo")) return "Other";
+  if (cat.includes("投资") || cat.includes("融资") || cat.includes("investor")) return "Investor";
+  if (cat.includes("法务") || cat.includes("合同")) return "Partners";
+  if (cat.includes("ems") || cat.includes("snowbot 工程") || cat.includes("snowbot 各模块")) return "Technical";
+  if (cat.includes("bess")) return "Products";
+  if (cat.includes("内部") || cat.includes("归档") || cat.includes("暂停")) return "Other";
+  if (bp.includes("bess") || bp.includes("product")) return "Products";
+  if (bp.includes("spec") || bp.includes("technical") || bp.includes("工程")) return "Technical";
+  return "Other";
+}
+
+export { VALID_PORTAL_CATEGORIES } from "../model/document.js";
 
 function blocksToDocumentBlocks(blocks: NotionBlock[], pageId: string, warnings: ValidationIssue[]): DocumentBlock[] {
   const result: DocumentBlock[] = [];

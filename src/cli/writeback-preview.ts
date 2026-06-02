@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import { loadConfigOrThrow, loadPreviewDeployConfig, runCli, UserFacingError, type AppConfig } from "../config.js";
-import type { BuildReport, ValidationIssue } from "../model/document.js";
+import { isPrivateLinkVisibility, type BuildReport, type ValidationIssue } from "../model/document.js";
 import { NotionWriteback } from "../notion/writeback.js";
 
 type ReportDocument = BuildReport["documents"][number];
@@ -38,7 +38,7 @@ await runCli(async () => {
         );
         continue;
       }
-      const url = publishedUrl(preview.baseUrl, document.docId);
+      const url = publishedUrl(preview.baseUrl, document.path);
       await writeback.updateDocumentSuccess(document.pageId, url, preview.runId);
       continue;
     }
@@ -86,7 +86,7 @@ function skipMessage(document: ReportDocument, config: AppConfig, warnings: stri
   if (!config.publishableStatuses.has(document.status)) {
     return `Skipped: Status "${document.status || "(empty)"}" is not configured for publishing.`;
   }
-  if (!config.allowedVisibility.has(document.visibility)) {
+  if (!isPrivateLinkVisibility(document.visibility) && !config.allowedVisibility.has(document.visibility)) {
     return `Skipped: Visibility "${document.visibility || "(empty)"}" is not allowed for this build target.`;
   }
   if (warnings && warnings.length > 0) {
@@ -95,9 +95,9 @@ function skipMessage(document: ReportDocument, config: AppConfig, warnings: stri
   return "Skipped: document was not included in preview build output.";
 }
 
-function publishedUrl(baseUrl: string | undefined, docId: string): string {
+function publishedUrl(baseUrl: string | undefined, canonicalPath: string): string {
   if (!baseUrl) {
     throw new UserFacingError("PREVIEW_BASE_URL is required to write published URLs.");
   }
-  return `${baseUrl}/docs/${docId}/`;
+  return `${baseUrl}${canonicalPath}`;
 }

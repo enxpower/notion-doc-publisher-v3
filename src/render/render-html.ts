@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { AppConfig, BrandProfile } from "../config.js";
-import type { DocumentModel } from "../model/document.js";
+import { isPrivateLinkVisibility, normalizeVisibility, type DocumentModel } from "../model/document.js";
 import { escapeHtml, renderBlocks } from "./render-blocks.js";
 import { isPublishableCandidate } from "../validate/validate.js";
 
@@ -24,18 +24,21 @@ export async function renderDocumentHtml(document: DocumentModel, config: AppCon
   const rawBody = renderBlocks(document.content, isPublishableCandidate(document, config) ? "publishable" : "draft");
   const { html: body, toc } = enrichBody(rawBody);
 
-  const classification = classify(meta.visibility);
+  const isPrivateLink = isPrivateLinkVisibility(meta.visibility);
+  const classification = classify(meta.visibility, meta.privateLinkNamespace);
   const updated = formatDate(document.source.lastEditedTime ?? document.source.createdTime);
 
   const sloganBlock = brand.tagline ? `<p class="masthead-slogan">${escapeHtml(brand.tagline)}</p>` : "";
+  const noindex = isPrivateLink ? '<meta name="robots" content="noindex, nofollow">' : "";
 
   return fillTemplate(template, {
+    noindex,
     title: escapeHtml(meta.title),
     docId: escapeHtml(meta.docId),
     documentType: escapeHtml(meta.documentType.label),
     brand: escapeHtml(brand.displayName),
     sloganBlock,
-    topbar: renderTopbar(brand.displayName, ROOT_RELATIVE_FROM_DOC),
+    topbar: renderTopbar(brand.displayName, ROOT_RELATIVE_FROM_DOC, !isPrivateLink),
     identity: renderIdentity(meta.docId, meta.documentType.label, meta.version, meta.status, classification),
     metaStrip: renderMetaStrip(meta.client.label, meta.project.label, updated),
     actions: renderActions(),
@@ -47,14 +50,15 @@ export async function renderDocumentHtml(document: DocumentModel, config: AppCon
   });
 }
 
-export function renderIndexHtml(documents: DocumentModel[], config?: AppConfig): string {
+export function renderIndexHtml(documents: DocumentModel[], config: AppConfig, rootRelative = ""): string {
+  const noindex = config.registerPublic ? "" : '<meta name="robots" content="noindex, nofollow">';
   const rows = documents
     .map((document) => {
       const meta = document.meta;
-      const brand = config ? resolveBrand(meta.brand.label, config).displayName : meta.brand.label;
+      const brand = resolveBrand(meta.brand.label, config).displayName;
       const classification = classify(meta.visibility);
       return `<tr>
-        <td class="register-title"><a href="${escapeHtml(meta.canonicalPath.replace(/^\//, ""))}">${escapeHtml(meta.title)}</a></td>
+        <td class="register-title"><a href="${escapeHtml(meta.canonicalPath)}">${escapeHtml(meta.title)}</a></td>
         <td><code>${escapeHtml(meta.docId)}</code></td>
         <td>${escapeHtml(brand)}</td>
         <td>${escapeHtml(meta.client.label)}</td>
@@ -73,12 +77,13 @@ export function renderIndexHtml(documents: DocumentModel[], config?: AppConfig):
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    ${noindex}
     <title>Document Register</title>
-    <link rel="stylesheet" href="assets/css/screen.css">
-    <link rel="stylesheet" href="assets/css/print.css" media="print">
+    <link rel="stylesheet" href="${rootRelative}assets/css/screen.css">
+    <link rel="stylesheet" href="${rootRelative}assets/css/print.css" media="print">
   </head>
   <body>
-    ${renderTopbar("Documents", "")}
+    ${renderTopbar("Documents", rootRelative)}
     <main class="site-index">
       <header class="register-header">
         <p class="document-kicker">Published Documents</p>
@@ -103,16 +108,72 @@ export function renderIndexHtml(documents: DocumentModel[], config?: AppConfig):
 `;
 }
 
+export function renderNamespaceRootHtml(namespace: string): string {
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex, nofollow">
+    <title>No Public Index</title>
+    <link rel="stylesheet" href="../assets/css/screen.css">
+    <link rel="stylesheet" href="../assets/css/print.css" media="print">
+  </head>
+  <body>
+    <header class="site-topbar no-print"><span class="topbar-brand">Documents</span></header>
+    <main class="site-index">
+      <header class="register-header">
+        <h1>No Public Index Available</h1>
+        <p class="register-intro">This area does not have a public document listing.</p>
+      </header>
+    </main>
+  </body>
+</html>
+`;
+}
+
+export function renderDocsRootHtml(registerPublic: boolean): string {
+  const noindex = '<meta name="robots" content="noindex, nofollow">';
+  const body = registerPublic
+    ? `<meta http-equiv="refresh" content="0; url=/register/">`
+    : "";
+  const message = registerPublic
+    ? `<p class="register-intro">Redirecting to <a href="/register/">Document Register</a>&hellip;</p>`
+    : `<p class="register-intro">Public documents are listed in the Document Register.</p>`;
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    ${noindex}
+    ${body}
+    <title>Document Index</title>
+    <link rel="stylesheet" href="../assets/css/screen.css">
+    <link rel="stylesheet" href="../assets/css/print.css" media="print">
+  </head>
+  <body>
+    <header class="site-topbar no-print"><a class="topbar-brand" href="../">Documents</a></header>
+    <main class="site-index">
+      <header class="register-header">
+        <h1>Document Index</h1>
+        ${message}
+      </header>
+    </main>
+  </body>
+</html>
+`;
+}
+
 /* ----------------------------------------------------------------
    Presentation partials
    ---------------------------------------------------------------- */
 
-function renderTopbar(brandLabel: string, rootRelative: string): string {
+function renderTopbar(brandLabel: string, rootRelative: string, linkHome = true): string {
   const home = rootRelative || "./";
-  return `<header class="site-topbar no-print">
-      <a class="topbar-brand" href="${escapeHtml(home)}">${escapeHtml(brandLabel)}</a>
-      <a class="topbar-link" href="${escapeHtml(home)}">Document Register</a>
-    </header>`;
+  const brand = linkHome
+    ? `<a class="topbar-brand" href="${escapeHtml(home)}">${escapeHtml(brandLabel)}</a>`
+    : `<span class="topbar-brand">${escapeHtml(brandLabel)}</span>`;
+  return `<header class="site-topbar no-print">${brand}</header>`;
 }
 
 function renderIdentity(
@@ -216,20 +277,20 @@ function enrichBody(body: string): { html: string; toc: TocEntry[] } {
   return { html, toc };
 }
 
-/**
- * Maps the Notion Visibility value to a printable classification label.
- * Derived from existing metadata — no schema change.
- */
-function classify(visibility: string): Classification {
-  switch (visibility.trim().toLowerCase()) {
+function classify(visibility: string, privateLinkNamespace = ""): Classification {
+  switch (normalizeVisibility(visibility)) {
     case "public":
       return { label: "Public Release", cls: "is-public" };
+    case "client":
+      return { label: "Client Link", cls: "is-client-link" };
     case "internal":
-      return { label: "Internal Use", cls: "is-internal" };
-    case "confidential":
-      return { label: "Confidential", cls: "is-confidential" };
-    default:
-      return { label: visibility || "Unspecified", cls: "is-other" };
+      return { label: "Internal Link", cls: "is-internal-link" };
+    case "unlisted":
+      switch (privateLinkNamespace.trim().toLowerCase()) {
+        case "partners": return { label: "Partner Link", cls: "is-partner-link" };
+        case "internal": return { label: "Internal Link", cls: "is-internal-link" };
+        default: return { label: "Client Link", cls: "is-client-link" };
+      }
   }
 }
 

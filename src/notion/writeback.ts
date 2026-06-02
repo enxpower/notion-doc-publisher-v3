@@ -52,6 +52,28 @@ export class NotionWriteback {
       LAST_BUILD_RUN: richText(runId)
     });
   }
+
+  async writeAutoFillProperties(
+    pageId: string,
+    props: { shareToken?: string; namespace?: string; portalCategory?: string }
+  ): Promise<void> {
+    const updates: Record<string, unknown> = {};
+    if (props.shareToken !== undefined) {
+      updates["Share Token"] = { rich_text: [{ type: "text", text: { content: props.shareToken } }] };
+      console.log(`  → Writing Share Token to Notion.`);
+    }
+    if (props.namespace !== undefined) {
+      updates["Private Link Namespace"] = { select: { name: props.namespace } };
+      console.log(`  → Writing Private Link Namespace "${props.namespace}" to Notion.`);
+    }
+    if (props.portalCategory !== undefined) {
+      updates["Portal Category"] = { select: { name: props.portalCategory } };
+      console.log(`  → Writing Portal Category "${props.portalCategory}" to Notion.`);
+    }
+    if (Object.keys(updates).length > 0) {
+      await this.client.updatePageProperties(pageId, updates);
+    }
+  }
 }
 
 export function assertWritebackSchema(database: NotionDatabase): void {

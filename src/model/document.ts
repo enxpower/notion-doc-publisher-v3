@@ -31,6 +31,11 @@ export type DocumentMeta = {
   status: string;
   visibility: string;
   publish: boolean;
+  portalListed: boolean;
+  shareToken: string;
+  privateLinkNamespace: string;
+  category: string;
+  portalCategory: string;
   canonicalPath: string;
 };
 
@@ -104,4 +109,27 @@ export type BuildReport = {
 
 export function emptyValidation(): ValidationResult {
   return { ok: true, errors: [], warnings: [] };
+}
+
+export const VALID_PRIVATE_LINK_NAMESPACES = new Set<string>(["clients", "partners", "internal"]);
+
+export const VALID_PORTAL_CATEGORIES = new Set<string>([
+  "Reports", "Technical", "Investor", "Partners",
+  "Marketing", "Whitepapers", "Products", "News", "Other"
+]);
+
+export type NormalizedVisibility = "public" | "client" | "internal" | "unlisted";
+
+export function normalizeVisibility(raw: string): NormalizedVisibility {
+  switch (raw.trim().toLowerCase()) {
+    case "client": return "client";
+    case "internal": return "internal";
+    case "unlisted": return "unlisted";
+    default: return "public";
+  }
+}
+
+export function isPrivateLinkVisibility(visibility: string): boolean {
+  const v = normalizeVisibility(visibility);
+  return v === "client" || v === "internal" || v === "unlisted";
 }
