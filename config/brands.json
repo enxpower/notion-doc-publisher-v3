@@ -1,14 +1,17 @@
 {
   "ARCBOS": {
     "displayName": "ARCBOS",
-    "tagline": "ENGINEERED FOR EXTREME CONDITIONS"
+    "tagline": "ENGINEERED FOR EXTREME CONDITIONS",
+    "shareImage": "arcbos-share-preview.png"
   },
   "ENERGIZE": {
     "displayName": "ENERGIZE",
-    "tagline": ""
+    "tagline": "",
+    "shareImage": "energizeos-share-preview.png"
   },
   "AGIM": {
     "displayName": "AGI&M",
-    "tagline": ""
+    "tagline": "",
+    "shareImage": "agim-share-preview.png"
   }
 }

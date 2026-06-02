@@ -4,6 +4,7 @@ import path from "node:path";
 export type BrandProfile = {
   displayName: string;
   tagline: string;
+  shareImage?: string;
 };
 
 export type AppConfig = {
@@ -95,7 +96,8 @@ function readBrandProfiles(): Record<string, BrandProfile> {
         const profile = value as Record<string, unknown>;
         result[brand] = {
           displayName: typeof profile.displayName === "string" ? profile.displayName : brand,
-          tagline: typeof profile.tagline === "string" ? profile.tagline : ""
+          tagline: typeof profile.tagline === "string" ? profile.tagline : "",
+          shareImage: typeof profile.shareImage === "string" ? profile.shareImage : undefined
         };
       }
       return result;
