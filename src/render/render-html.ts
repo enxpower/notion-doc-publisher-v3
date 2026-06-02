@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { AppConfig, BrandProfile } from "../config.js";
-import { isPrivateLinkVisibility, normalizeVisibility, type DocumentModel } from "../model/document.js";
+import { isPrivateLinkVisibility, normalizeVisibility, type DocumentBlock, type DocumentMeta, type DocumentModel } from "../model/document.js";
 import { escapeHtml, renderBlocks } from "./render-blocks.js";
 import { isPublishableCandidate } from "../validate/validate.js";
 
@@ -30,9 +30,11 @@ export async function renderDocumentHtml(document: DocumentModel, config: AppCon
 
   const sloganBlock = brand.tagline ? `<p class="masthead-slogan">${escapeHtml(brand.tagline)}</p>` : "";
   const noindex = isPrivateLink ? '<meta name="robots" content="noindex, nofollow">' : "";
+  const metaTags = buildMetaTags(meta, document.content, isPrivateLink, brand, config);
 
   return fillTemplate(template, {
     noindex,
+    metaTags,
     title: escapeHtml(meta.title),
     docId: escapeHtml(meta.docId),
     documentType: escapeHtml(meta.documentType.label),
@@ -162,6 +164,76 @@ export function renderDocsRootHtml(registerPublic: boolean): string {
   </body>
 </html>
 `;
+}
+
+/* ----------------------------------------------------------------
+   Share metadata (description / OG / Twitter Card / favicon)
+   ---------------------------------------------------------------- */
+
+function buildMetaTags(
+  meta: DocumentMeta,
+  content: DocumentBlock[],
+  isPrivateLink: boolean,
+  brand: BrandPresentation,
+  config: AppConfig
+): string {
+  const lines: string[] = [];
+  const domain = config.targetSiteDomain?.replace(/\/+$/, "") ?? "";
+  const ogImage = domain ? escapeHtml(`${domain}/assets/share-preview.png`) : "";
+  const twitterCard = ogImage ? "summary_large_image" : "summary";
+
+  lines.push(`<link rel="icon" href="${ROOT_RELATIVE_FROM_DOC}assets/favicon.ico">`);
+
+  if (isPrivateLink) {
+    const safeTitle = escapeHtml(`${brand.displayName} Document`);
+    const safeDesc = escapeHtml(`A private document from ${brand.displayName}.`);
+    lines.push(`<meta name="description" content="${safeDesc}">`);
+    lines.push(`<meta property="og:type" content="article">`);
+    lines.push(`<meta property="og:title" content="${safeTitle}">`);
+    lines.push(`<meta property="og:description" content="${safeDesc}">`);
+    if (ogImage) lines.push(`<meta property="og:image" content="${ogImage}">`);
+    // Intentionally no og:url — share token must not appear in OG metadata
+    lines.push(`<meta name="twitter:card" content="${twitterCard}">`);
+    lines.push(`<meta name="twitter:title" content="${safeTitle}">`);
+    lines.push(`<meta name="twitter:description" content="${safeDesc}">`);
+    if (ogImage) lines.push(`<meta name="twitter:image" content="${ogImage}">`);
+  } else {
+    const ogTitle = escapeHtml(truncate(meta.title, 60));
+    const rawDesc = extractDescription(content, brand);
+    const ogDesc = rawDesc ? escapeHtml(truncate(rawDesc, 160)) : "";
+
+    if (ogDesc) lines.push(`<meta name="description" content="${ogDesc}">`);
+    lines.push(`<meta property="og:type" content="article">`);
+    lines.push(`<meta property="og:title" content="${ogTitle}">`);
+    if (ogDesc) lines.push(`<meta property="og:description" content="${ogDesc}">`);
+    if (domain && meta.canonicalPath) {
+      lines.push(`<meta property="og:url" content="${escapeHtml(domain + meta.canonicalPath)}">`);
+    }
+    if (ogImage) lines.push(`<meta property="og:image" content="${ogImage}">`);
+    lines.push(`<meta name="twitter:card" content="${twitterCard}">`);
+    lines.push(`<meta name="twitter:title" content="${ogTitle}">`);
+    if (ogDesc) lines.push(`<meta name="twitter:description" content="${ogDesc}">`);
+    if (ogImage) lines.push(`<meta name="twitter:image" content="${ogImage}">`);
+  }
+
+  return lines.join("\n    ");
+}
+
+function extractDescription(content: DocumentBlock[], brand: BrandPresentation): string {
+  for (const block of content) {
+    if (block.type === "paragraph" && block.richText.length > 0) {
+      const text = block.richText.map((span) => span.text).join("").trim();
+      if (text.length >= 10) {
+        return text;
+      }
+    }
+  }
+  return brand.tagline || "";
+}
+
+function truncate(text: string, maxLen: number): string {
+  if (text.length <= maxLen) return text;
+  return text.slice(0, maxLen - 1).trimEnd() + "…";
 }
 
 /* ----------------------------------------------------------------

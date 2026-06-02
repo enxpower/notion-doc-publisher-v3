@@ -7,6 +7,12 @@ export async function copyStyles(distDir = "dist"): Promise<void> {
   await fs.mkdir(path.join(distDir, "assets", "css"), { recursive: true });
   await fs.copyFile("styles/screen.css", path.join(distDir, "assets", "css", "screen.css"));
   await fs.copyFile("styles/print.css", path.join(distDir, "assets", "css", "print.css"));
+  // Copy share preview image when present; silent no-op if not yet placed
+  try {
+    await fs.copyFile("assets/share-preview.png", path.join(distDir, "assets", "share-preview.png"));
+  } catch {
+    // File absent — og:image tags are emitted but will 404 until the image is added
+  }
 }
 
 export async function copyDocumentAssets(document: DocumentModel, distDir = "dist"): Promise<void> {
