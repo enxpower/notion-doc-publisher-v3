@@ -54,6 +54,7 @@ export async function renderDocumentHtml(document: DocumentModel, config: AppCon
 
 export function renderIndexHtml(documents: DocumentModel[], config: AppConfig, rootRelative = ""): string {
   const noindex = config.registerPublic ? "" : '<meta name="robots" content="noindex, nofollow">';
+  const registerMetaTags = buildRegisterMetaTags(config, rootRelative);
   const rows = documents
     .map((document) => {
       const meta = document.meta;
@@ -81,6 +82,7 @@ export function renderIndexHtml(documents: DocumentModel[], config: AppConfig, r
     <meta name="viewport" content="width=device-width, initial-scale=1">
     ${noindex}
     <title>Document Register</title>
+    ${registerMetaTags}
     <link rel="stylesheet" href="${rootRelative}assets/css/screen.css">
     <link rel="stylesheet" href="${rootRelative}assets/css/print.css" media="print">
   </head>
@@ -234,6 +236,29 @@ function extractDescription(content: DocumentBlock[], brand: BrandPresentation):
 function truncate(text: string, maxLen: number): string {
   if (text.length <= maxLen) return text;
   return text.slice(0, maxLen - 1).trimEnd() + "…";
+}
+
+function buildRegisterMetaTags(config: AppConfig, rootRelative: string): string {
+  const domain = config.targetSiteDomain?.replace(/\/+$/, "") ?? "";
+  const ogTitle = "Document Register";
+  const ogDesc = "A formal register of published ARCBOS documents.";
+  const canonicalPath = rootRelative === "" ? "/" : "/register/";
+  const ogImage = domain ? escapeHtml(`${domain}/assets/share-preview.png`) : "";
+  const twitterCard = ogImage ? "summary_large_image" : "summary";
+  const lines: string[] = [];
+
+  lines.push(`<meta name="description" content="${escapeHtml(ogDesc)}">`);
+  lines.push(`<meta property="og:type" content="website">`);
+  lines.push(`<meta property="og:title" content="${escapeHtml(ogTitle)}">`);
+  lines.push(`<meta property="og:description" content="${escapeHtml(ogDesc)}">`);
+  if (domain) lines.push(`<meta property="og:url" content="${escapeHtml(domain + canonicalPath)}">`);
+  if (ogImage) lines.push(`<meta property="og:image" content="${ogImage}">`);
+  lines.push(`<meta name="twitter:card" content="${twitterCard}">`);
+  lines.push(`<meta name="twitter:title" content="${escapeHtml(ogTitle)}">`);
+  lines.push(`<meta name="twitter:description" content="${escapeHtml(ogDesc)}">`);
+  if (ogImage) lines.push(`<meta name="twitter:image" content="${ogImage}">`);
+
+  return lines.join("\n    ");
 }
 
 /* ----------------------------------------------------------------
