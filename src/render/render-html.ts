@@ -8,6 +8,7 @@ import { isPublishableCandidate } from "../validate/validate.js";
 type BrandPresentation = {
   displayName: string;
   tagline: string;
+  shareImage?: string;
 };
 
 type TocEntry = { level: number; text: string; id: string };
@@ -181,7 +182,8 @@ function buildMetaTags(
 ): string {
   const lines: string[] = [];
   const domain = config.targetSiteDomain?.replace(/\/+$/, "") ?? "";
-  const ogImage = domain ? escapeHtml(`${domain}/assets/share-preview.png`) : "";
+  const shareImageFile = brand.shareImage ?? "share-preview.png";
+  const ogImage = domain ? escapeHtml(`${domain}/assets/${shareImageFile}`) : "";
   const twitterCard = ogImage ? "summary_large_image" : "summary";
 
   lines.push(`<link rel="icon" href="${ROOT_RELATIVE_FROM_DOC}assets/favicon.ico">`);
@@ -419,7 +421,8 @@ function resolveBrand(label: string, config: AppConfig): BrandPresentation {
   const profile: BrandProfile | undefined = config.brandProfiles[label];
   return {
     displayName: profile?.displayName?.trim() || label || "Document",
-    tagline: profile?.tagline?.trim() || ""
+    tagline: profile?.tagline?.trim() || "",
+    shareImage: profile?.shareImage?.trim() || undefined
   };
 }
 
