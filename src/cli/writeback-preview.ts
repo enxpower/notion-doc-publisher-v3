@@ -19,6 +19,14 @@ await runCli(async () => {
   const buildFailed = process.env.BUILD_RESULT === "failure" || validationReport.errors.length > 0;
   const deployFailed = preview.enabled && process.env.DEPLOY_RESULT !== "success";
 
+  if (validationReport.documents.length === 0 && buildFailed) {
+    console.warn(
+      "Write-back: validation report contains no documents. " +
+      "The build likely crashed before Notion data could be loaded (e.g. API timeout). " +
+      "No Notion pages will be updated this run."
+    );
+  }
+
   for (const document of validationReport.documents) {
     if (buildFailed && errorMessagesByPage.has(document.pageId)) {
       await writeback.updateDocumentFailed(document.pageId, errorMessagesByPage.get(document.pageId)!.join("; "), preview.runId);

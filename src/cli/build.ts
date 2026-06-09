@@ -25,6 +25,16 @@ await runCli(async () => {
     }
   }
 
+  // Write an empty emergency report immediately so writeback-preview never fails
+  // to find the file if an unhandled exception occurs later in this script
+  // (e.g. Notion API timeout during loadDocuments / autoFillDocuments).
+  await writeJson("dist/reports/validation-report.json", {
+    generatedAt: new Date().toISOString(),
+    documents: [],
+    errors: [{ code: "BUILD_CRASH", message: "Build process did not complete. Check workflow logs for details.", pageId: null }],
+    warnings: []
+  });
+
   const documents = await loadDocuments(config);
 
   // Auto-fill missing Share Token / Namespace / Portal Category and write back to Notion
