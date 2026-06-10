@@ -201,6 +201,19 @@ h1:lang(zh) {
   letter-spacing: 0;
 }
 
+/* Long Chinese contracts: strict CJK line breaking, justified body text,
+   and slightly looser leading for dense hanzi paragraphs. Applies when the
+   document language is Chinese or content carries lang="zh". */
+:lang(zh) p,
+:lang(zh) li,
+:lang(zh) blockquote {
+  line-break: strict;
+  word-break: normal;
+  overflow-wrap: break-word;
+  text-align: justify;
+  text-justify: inter-ideograph;
+}
+
 /* Refined identity / meta bar: facts on the left, quiet status tags on the
    right — one cohesive line, not floating UI. */
 .document-identity {
@@ -373,7 +386,20 @@ dd {
   max-width: var(--document-measure);
 }
 
+.toc-details summary {
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.toc-details summary::-webkit-details-marker {
+  display: none;
+}
+
 .toc-title {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
   margin: 0 0 12px;
   font-family: var(--font-sans);
   font-size: 10px;
@@ -383,18 +409,47 @@ dd {
   color: var(--faint);
 }
 
+/* disclosure affordance: a small chevron that rotates when open */
+.toc-details summary.toc-title::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid var(--faint);
+  border-bottom: 1.5px solid var(--faint);
+  transform: rotate(-45deg) translateY(-1px);
+  transition: transform 0.12s ease;
+  flex: none;
+}
+
+.toc-details[open] summary.toc-title::before {
+  transform: rotate(45deg);
+}
+
+.toc-details summary:hover.toc-title,
+.toc-details summary:hover.toc-title::before {
+  color: var(--muted);
+  border-color: var(--muted);
+}
+
+.toc-count {
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--faint);
+}
+
 .toc-list {
   margin: 0;
   padding: 0;
   list-style: none;
   font-family: var(--font-sans);
-  font-size: 13px;
+  font-size: 12.5px;
+  line-height: 1.45;
   columns: 2;
-  column-gap: 40px;
+  column-gap: 44px;
 }
 
 .toc-list li {
-  margin: 0 0 7px;
+  margin: 0 0 6px;
   break-inside: avoid;
 }
 
@@ -415,12 +470,6 @@ dd {
 
 .toc-list a:hover {
   color: var(--brand-accent);
-}
-
-@media (max-width: 680px) {
-  .toc-list {
-    columns: 1;
-  }
 }
 
 /* ============================================================
@@ -542,6 +591,8 @@ blockquote {
 pre {
   overflow: auto;
   padding: 15px 17px;
+  tab-size: 4;
+  line-height: 1.5;
   border: 1px solid var(--line);
   border-radius: 4px;
   background: #f6f7f8;
@@ -651,6 +702,16 @@ th {
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* Dense tables stay legible: subtle row separation, no zebra noise. */
+tbody tr:hover {
+  background: var(--soft);
+}
+
+td {
+  overflow-wrap: break-word;
 }
 
 hr {
@@ -800,8 +861,51 @@ hr {
   }
 }
 
-@media (max-width: 460px) {
+@media (max-width: 680px) {
+  .toc-list {
+    columns: 1;
+  }
+
+  .site-topbar {
+    height: 50px;
+  }
+
+  .document-content {
+    font-size: 16px;
+  }
+
+  .document-kicker {
+    margin-bottom: 8px;
+  }
+
   .document-meta {
-    grid-template-columns: 1fr;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  th,
+  td {
+    padding: 8px 10px;
+  }
+}
+
+@media (max-width: 460px) {
+  .document,
+  .site-index {
+    padding: 22px 16px;
+  }
+
+  h1 {
+    font-size: 24px;
+  }
+
+  .identity-tags {
+    gap: 12px;
+  }
+
+  .register-table-wrap {
+    margin-left: -16px;
+    margin-right: -16px;
+    padding: 0 16px;
   }
 }

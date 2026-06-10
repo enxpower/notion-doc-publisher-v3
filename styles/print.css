@@ -177,6 +177,22 @@ blockquote,
   widows: 3;
 }
 
+:lang(zh) p,
+:lang(zh) li,
+:lang(zh) blockquote {
+  line-break: strict;
+  text-align: justify;
+  text-justify: inter-ideograph;
+}
+
+/* Keep a heading attached to at least the start of its section. */
+h2 + p,
+h3 + p,
+h4 + p {
+  break-before: avoid;
+  page-break-before: avoid;
+}
+
 /* Executive metadata strip */
 .document-summary {
   padding: 5mm 0 7mm;
@@ -227,10 +243,17 @@ a {
 
 blockquote,
 .callout,
-.block-warning,
-pre {
+.block-warning {
   break-inside: avoid;
   page-break-inside: avoid;
+}
+
+/* Long code trees may exceed a page; forcing break-inside:avoid would leave
+   large blank gaps. Allow breaking, but keep short blocks intact. */
+pre {
+  break-inside: auto;
+  orphans: 4;
+  widows: 4;
 }
 
 blockquote {
@@ -292,6 +315,14 @@ table {
   width: 100%;
   border-collapse: collapse;
   font-size: 8.5pt;
+}
+
+thead {
+  display: table-header-group;
+}
+
+tfoot {
+  display: table-footer-group;
 }
 
 tr {

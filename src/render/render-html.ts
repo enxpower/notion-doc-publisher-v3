@@ -337,9 +337,17 @@ function renderToc(entries: TocEntry[]): string {
       return `<li class="toc-d${depth}"><a href="#${entry.id}">${entry.text}</a></li>`;
     })
     .join("");
+  // Long tables of contents collapse by default so the document title and
+  // opening prose stay above the fold. Native <details> keeps this working
+  // without JavaScript; anchors and entries are unchanged. Print continues to
+  // hide the TOC entirely via print.css.
+  const sectionCount = entries.length;
+  const isLong = sectionCount > 12;
   return `<nav class="document-toc no-print" aria-label="Contents">
-        <p class="toc-title">Contents</p>
-        <ol class="toc-list">${items}</ol>
+        <details class="toc-details"${isLong ? "" : " open"}>
+          <summary class="toc-title">Contents<span class="toc-count">${sectionCount} sections</span></summary>
+          <ol class="toc-list">${items}</ol>
+        </details>
       </nav>`;
 }
 
