@@ -22,8 +22,17 @@ export async function renderDocumentHtml(document: DocumentModel, config: AppCon
   const meta = document.meta;
   const brand = resolveBrand(meta.brand.label, config);
 
-  const rawBody = renderBlocks(document.content, isPublishableCandidate(document, config) ? "publishable" : "draft");
-  const { html: body, toc } = enrichBody(rawBody);
+  // Heading ids and TOC entries are generated at the block-render stage from
+  // structured rich text — no post-hoc HTML parsing. h2/h3 (Notion heading_1/2)
+  // enter the TOC; h4 receives an anchor id only, matching prior behavior.
+  const toc: TocEntry[] = [];
+  const body = renderBlocks(document.content, isPublishableCandidate(document, config) ? "publishable" : "draft", {
+    collectHeading: (level, text, id) => {
+      if (level === 2 || level === 3) {
+        toc.push({ level, text, id });
+      }
+    }
+  });
 
   const isPrivateLink = isPrivateLinkVisibility(meta.visibility);
   const classification = classify(meta.visibility, meta.privateLinkNamespace);
@@ -62,13 +71,13 @@ export function renderIndexHtml(documents: DocumentModel[], config: AppConfig, r
       const brand = resolveBrand(meta.brand.label, config).displayName;
       const classification = classify(meta.visibility);
       return `<tr>
-        <td class="register-title"><a href="${escapeHtml(meta.canonicalPath)}">${escapeHtml(meta.title)}</a></td>
-        <td><code>${escapeHtml(meta.docId)}</code></td>
-        <td>${escapeHtml(brand)}</td>
-        <td>${escapeHtml(meta.client.label)}</td>
-        <td>${escapeHtml(meta.documentType.label)}</td>
-        <td>${escapeHtml(meta.version)}</td>
-        <td><span class="tag ${classification.cls}">${escapeHtml(classification.label)}</span></td>
+        <td class="register-title" data-label="Title"><a href="${escapeHtml(meta.canonicalPath)}">${escapeHtml(meta.title)}</a></td>
+        <td data-label="DOC_ID"><code>${escapeHtml(meta.docId)}</code></td>
+        <td data-label="Brand">${escapeHtml(brand)}</td>
+        <td data-label="Client">${escapeHtml(meta.client.label)}</td>
+        <td data-label="Type">${escapeHtml(meta.documentType.label)}</td>
+        <td data-label="Version">${escapeHtml(meta.version)}</td>
+        <td data-label="Classification"><span class="tag ${classification.cls}">${escapeHtml(classification.label)}</span></td>
       </tr>`;
     })
     .join("\n");
@@ -128,9 +137,14 @@ export function renderNamespaceRootHtml(namespace: string): string {
     <header class="site-topbar no-print"><span class="topbar-brand">Documents</span></header>
     <main class="site-index">
       <header class="register-header">
+        <p class="document-kicker">Private Area</p>
         <h1>No Public Index Available</h1>
-        <p class="register-intro">This area does not have a public document listing.</p>
+        <p class="register-intro">This area does not have a public document listing. Documents here are accessible only through their private links.</p>
       </header>
+      <footer class="site-footer">
+        <span>Document Portal</span>
+        <span>Restricted</span>
+      </footer>
     </main>
   </body>
 </html>
@@ -160,9 +174,14 @@ export function renderDocsRootHtml(registerPublic: boolean): string {
     <header class="site-topbar no-print"><a class="topbar-brand" href="../">Documents</a></header>
     <main class="site-index">
       <header class="register-header">
+        <p class="document-kicker">Document Portal</p>
         <h1>Document Index</h1>
         ${message}
       </header>
+      <footer class="site-footer">
+        <span>Document Portal</span>
+        <span>&nbsp;</span>
+      </footer>
     </main>
   </body>
 </html>
@@ -243,7 +262,7 @@ function truncate(text: string, maxLen: number): string {
 function buildRegisterMetaTags(config: AppConfig, rootRelative: string): string {
   const domain = config.targetSiteDomain?.replace(/\/+$/, "") ?? "";
   const ogTitle = "Document Register";
-  const ogDesc = "A formal register of published ARCBOS documents.";
+  const ogDesc = "A formal register of published documents.";
   const canonicalPath = rootRelative === "" ? "/" : "/register/";
   const ogImage = domain ? escapeHtml(`${domain}/assets/share-preview.png`) : "";
   const twitterCard = ogImage ? "summary_large_image" : "summary";
@@ -334,7 +353,7 @@ function renderToc(entries: TocEntry[]): string {
   const items = entries
     .map((entry) => {
       const depth = entry.level - minLevel; // 0 = top level
-      return `<li class="toc-d${depth}"><a href="#${entry.id}">${entry.text}</a></li>`;
+      return `<li class="toc-d${depth}"><a href="#${entry.id}">${escapeHtml(entry.text)}</a></li>`;
     })
     .join("");
   // Long tables of contents collapse by default so the document title and
@@ -368,22 +387,6 @@ function renderFooter(brandLabel: string, docId: string, version: string): strin
  * Operates on the already-escaped HTML from renderBlocks, so heading text in
  * the TOC is safe. h2/h3 feed the TOC; h4 still gets an id for deep-linking.
  */
-function enrichBody(body: string): { html: string; toc: TocEntry[] } {
-  const toc: TocEntry[] = [];
-  let counter = 0;
-  const html = body.replace(/<(h[234])>([\s\S]*?)<\/\1>/g, (_match, tag: string, inner: string) => {
-    counter += 1;
-    const level = Number(tag.slice(1));
-    const text = inner.replace(/<[^>]+>/g, "").trim();
-    const id = `sec-${counter}-${slugify(text).slice(0, 40)}`.replace(/-+$/g, "");
-    if (level === 2 || level === 3) {
-      toc.push({ level, text, id });
-    }
-    return `<${tag} id="${id}">${inner}</${tag}>`;
-  });
-  return { html, toc };
-}
-
 function classify(visibility: string, privateLinkNamespace = ""): Classification {
   switch (normalizeVisibility(visibility)) {
     case "public":

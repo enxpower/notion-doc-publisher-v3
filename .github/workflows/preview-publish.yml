@@ -100,6 +100,9 @@ jobs:
       - name: Install
         run: npm ci
 
+      - name: Regression tests (no Notion access)
+        run: npm test
+
       - name: Assign missing DOC_IDs
         run: npm run assign-id
 

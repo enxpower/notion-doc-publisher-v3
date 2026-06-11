@@ -909,3 +909,70 @@ hr {
     padding: 0 16px;
   }
 }
+
+/* ============================================================
+   Register — mobile card layout
+   Below 560px the flat table re-stacks into labeled cards so
+   dense registers stay readable without horizontal scrolling.
+   Uses data-label attributes emitted by the renderer.
+   ============================================================ */
+@media (max-width: 560px) {
+  .register-table-wrap {
+    margin-left: 0;
+    margin-right: 0;
+    padding: 0;
+    overflow: visible;
+    border-top: 0;
+  }
+
+  .document-register,
+  .document-register tbody,
+  .document-register tr,
+  .document-register td {
+    display: block;
+    width: 100%;
+  }
+
+  .document-register thead {
+    display: none;
+  }
+
+  .document-register tr {
+    margin-bottom: 14px;
+    padding: 14px 16px;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    background: var(--paper);
+  }
+
+  .document-register tbody tr:hover {
+    background: var(--soft);
+  }
+
+  .document-register td {
+    padding: 3px 0;
+    border-bottom: 0;
+  }
+
+  .document-register td::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 1px;
+    color: var(--faint);
+    font-family: var(--font-sans);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+  }
+
+  .document-register .register-title {
+    padding-bottom: 8px;
+    margin-bottom: 6px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .document-register .register-title::before {
+    display: none;
+  }
+}

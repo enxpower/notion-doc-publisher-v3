@@ -6,7 +6,7 @@
   "description": "Lightweight enterprise Notion document publisher V3",
   "scripts": {
     "validate": "tsc && node .tmp/cli/validate.js",
-    "build": "tsc && node .tmp/cli/build.js",
+    "build": "tsc && node .tmp/cli/security-lint.js && node .tmp/cli/build.js",
     "assign-id:dry": "tsc && node .tmp/cli/assign-id.js --dry-run",
     "assign-id": "tsc && node .tmp/cli/assign-id.js --write",
     "clean": "tsc && node .tmp/cli/clean.js",
@@ -14,11 +14,15 @@
     "check": "tsc --noEmit",
     "smoke": "npm run check && npm run build",
     "ci:writeback": "tsc && node .tmp/cli/writeback-preview.js",
-    "publish:preview": "npm run assign-id && npm run build && npm run ci:writeback"
+    "publish:preview": "npm run assign-id && npm run build && npm run ci:writeback",
+    "test": "tsc && node --test \".tmp/tests/\"*.test.js",
+    "lint:security": "tsc && node .tmp/cli/security-lint.js",
+    "pdf": "tsc && node .tmp/cli/export-pdf.js"
   },
   "devDependencies": {
     "@types/node": "^20.12.12",
     "tsx": "^4.19.2",
-    "typescript": "^5.6.3"
+    "typescript": "^5.6.3",
+    "playwright": "^1.49.0"
   }
 }

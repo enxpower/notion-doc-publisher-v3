@@ -1,7 +1,34 @@
 import type { DocumentBlock, RichTextSpan } from "../model/document.js";
 
-export function renderBlocks(blocks: DocumentBlock[], mode: "draft" | "publishable"): string {
+export type HeadingCollector = (level: number, plainText: string, id: string) => void;
+
+export type RenderBlocksOptions = {
+  /**
+   * When provided, headings receive stable `sec-{n}-{slug}` ids generated at
+   * the source (no post-hoc HTML parsing), and each h2/h3/h4 is reported to
+   * the collector so the caller can assemble a table of contents.
+   */
+  collectHeading?: HeadingCollector;
+};
+
+export function renderBlocks(
+  blocks: DocumentBlock[],
+  mode: "draft" | "publishable",
+  options: RenderBlocksOptions = {}
+): string {
   const html: string[] = [];
+  let headingCounter = 0;
+  const heading = (tag: "h2" | "h3" | "h4", richText: RichTextSpan[]): string => {
+    const inner = renderRichText(richText);
+    if (!options.collectHeading) {
+      return `<${tag}>${inner}</${tag}>`;
+    }
+    headingCounter += 1;
+    const plainText = richText.map((span) => span.text).join("").trim();
+    const id = `sec-${headingCounter}-${slugifyHeading(plainText).slice(0, 40)}`.replace(/-+$/g, "");
+    options.collectHeading(Number(tag.slice(1)), plainText, id);
+    return `<${tag} id="${id}">${inner}</${tag}>`;
+  };
   for (let index = 0; index < blocks.length; index += 1) {
     const block = blocks[index]!;
     switch (block.type) {
@@ -9,13 +36,13 @@ export function renderBlocks(blocks: DocumentBlock[], mode: "draft" | "publishab
         html.push(`<p>${renderRichText(block.richText)}</p>`);
         break;
       case "heading_1":
-        html.push(`<h2>${renderRichText(block.richText)}</h2>`);
+        html.push(heading("h2", block.richText));
         break;
       case "heading_2":
-        html.push(`<h3>${renderRichText(block.richText)}</h3>`);
+        html.push(heading("h3", block.richText));
         break;
       case "heading_3":
-        html.push(`<h4>${renderRichText(block.richText)}</h4>`);
+        html.push(heading("h4", block.richText));
         break;
       case "heading_4":
         html.push(`<h5>${renderRichText(block.richText)}</h5>`);
@@ -115,4 +142,11 @@ function renderTable(rows: RichTextSpan[][][]): string {
 
 function escapeAttribute(value: string): string {
   return escapeHtml(value).replace(/`/g, "&#96;");
+}
+
+function slugifyHeading(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 }
