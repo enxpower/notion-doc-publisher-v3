@@ -47,7 +47,7 @@ export function loadConfig(): AppConfig {
   return {
     notionToken,
     notionDatabaseId,
-    targetSiteDomain: cleanOptional(process.env.TARGET_SITE_DOMAIN),
+    targetSiteDomain: cleanOptional(process.env.TARGET_SITE_DOMAIN) ?? cleanOptional(process.env.PREVIEW_BASE_URL),
     docIdYearMonth: readYearMonth(),
     allowedVisibility: new Set(readListEnv("ALLOWED_VISIBILITY", "Public")),
     publishableStatuses: new Set(readRequiredListEnv("PUBLISHABLE_STATUSES")),
@@ -215,7 +215,7 @@ function readRequiredJsonMap(name: string): Record<string, string> {
       throw new Error("not an object");
     }
     const result: Record<string, string> = {};
-    for (const [key, value] of Object.entries(parsed)) {
+    for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
       if (typeof value !== "string" || !/^[A-Z0-9]+$/.test(value)) {
         throw new Error(`invalid token for ${key}`);
       }
