@@ -190,3 +190,10 @@ configured for publishing.`), or `failed`.
 
 v0.2.0 adds preview/test deployment only. It does not add PDF automation,
 approval workflow, production deployment, or writes to production repositories.
+
+## AI / Governance Operating Rules
+
+- AI agents must read `AGENTS.md` first before doing any work in this repository.
+- AI agents must read governance documents in `docs/` before coding.
+- HTML and static publishing work must read `docs/HTML_PUBLISHING_GOVERNANCE.md`.
+- No deploy, secret, Notion write, workflow, or publishing behavior changes without explicit owner approval.
