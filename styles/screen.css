@@ -22,6 +22,11 @@
   box-sizing: border-box;
 }
 
+html {
+  overflow-x: clip; /* Guardrail: clips visual overflow at html boundary without
+                       creating a scroll container or affecting position:sticky */
+}
+
 :root {
   color-scheme: light;
 
@@ -478,6 +483,8 @@ dd {
 .document-content {
   padding-top: 26px;
   font-size: 16.5px;
+  overflow-wrap: break-word; /* Prevent long URLs / unbreakable strings from
+                                forcing body-level horizontal scroll */
 }
 
 .document-content > * {
@@ -589,6 +596,8 @@ blockquote {
 
 /* code */
 pre {
+  max-width: 100%; /* Prevents code blocks from exceeding container width;
+                      overflow:auto below handles internal horizontal scroll */
   overflow: auto;
   padding: 15px 17px;
   tab-size: 4;
@@ -853,6 +862,8 @@ hr {
 
   h1 {
     font-size: 28px;
+    overflow-wrap: break-word; /* Long titles wrap instead of overflowing the viewport */
+    word-break: break-word;
   }
 
   .document-identity {

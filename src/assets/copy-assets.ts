@@ -7,16 +7,22 @@ export async function copyStyles(distDir = "dist"): Promise<void> {
   await fs.mkdir(path.join(distDir, "assets", "css"), { recursive: true });
   await fs.copyFile("styles/screen.css", path.join(distDir, "assets", "css", "screen.css"));
   await fs.copyFile("styles/print.css", path.join(distDir, "assets", "css", "print.css"));
-  // Copy generic and brand-specific share preview images; silent no-op for any absent files
+  // Copy static assets: share preview images and favicon files.
+  // All copies are silent no-ops if the source file is absent.
   try {
     const sourceDir = "assets";
     const files = await fs.readdir(sourceDir);
     for (const file of files) {
-      if (file === "share-preview.png" || /^.+-share-preview\.png$/.test(file)) {
+      if (
+        file === "share-preview.png" ||
+        /^.+-share-preview\.png$/.test(file) ||
+        file === "favicon.ico" ||
+        file === "favicon.png"
+      ) {
         try {
           await fs.copyFile(path.join(sourceDir, file), path.join(distDir, "assets", file));
         } catch {
-          // File absent — og:image tags are emitted but will 404 until the image is added
+          // File absent — og:image / favicon tags are emitted but will 404 until the file is added
         }
       }
     }

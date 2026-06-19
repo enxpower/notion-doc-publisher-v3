@@ -208,17 +208,28 @@ function buildMetaTags(
   lines.push(`<link rel="icon" href="${ROOT_RELATIVE_FROM_DOC}assets/favicon.ico">`);
 
   if (isPrivateLink) {
-    const safeTitle = escapeHtml(`${brand.displayName} Document`);
-    const safeDesc = escapeHtml(`A private document from ${brand.displayName}.`);
-    lines.push(`<meta name="description" content="${safeDesc}">`);
+    // Use real title and description — both are visible to anyone who opens
+    // the link, so this does not expose private content.
+    // og:url is intentionally omitted to keep the share token out of OG metadata.
+    const ogTitle = escapeHtml(truncate(meta.title || `${brand.displayName} Document`, 60));
+    const rawDesc = extractDescription(content, brand);
+    const ogDesc = rawDesc
+      ? escapeHtml(truncate(rawDesc, 160))
+      : escapeHtml(`${brand.displayName}${meta.documentType.label ? ` · ${meta.documentType.label}` : ""}`);
+
+    lines.push(`<meta name="description" content="${ogDesc}">`);
     lines.push(`<meta property="og:type" content="article">`);
-    lines.push(`<meta property="og:title" content="${safeTitle}">`);
-    lines.push(`<meta property="og:description" content="${safeDesc}">`);
-    if (ogImage) lines.push(`<meta property="og:image" content="${ogImage}">`);
+    lines.push(`<meta property="og:title" content="${ogTitle}">`);
+    lines.push(`<meta property="og:description" content="${ogDesc}">`);
+    if (ogImage) {
+      lines.push(`<meta property="og:image" content="${ogImage}">`);
+      lines.push(`<meta property="og:image:width" content="1200">`);
+      lines.push(`<meta property="og:image:height" content="630">`);
+    }
     // Intentionally no og:url — share token must not appear in OG metadata
     lines.push(`<meta name="twitter:card" content="${twitterCard}">`);
-    lines.push(`<meta name="twitter:title" content="${safeTitle}">`);
-    lines.push(`<meta name="twitter:description" content="${safeDesc}">`);
+    lines.push(`<meta name="twitter:title" content="${ogTitle}">`);
+    lines.push(`<meta name="twitter:description" content="${ogDesc}">`);
     if (ogImage) lines.push(`<meta name="twitter:image" content="${ogImage}">`);
   } else {
     const ogTitle = escapeHtml(truncate(meta.title, 60));
@@ -232,7 +243,11 @@ function buildMetaTags(
     if (domain && meta.canonicalPath) {
       lines.push(`<meta property="og:url" content="${escapeHtml(domain + meta.canonicalPath)}">`);
     }
-    if (ogImage) lines.push(`<meta property="og:image" content="${ogImage}">`);
+    if (ogImage) {
+      lines.push(`<meta property="og:image" content="${ogImage}">`);
+      lines.push(`<meta property="og:image:width" content="1200">`);
+      lines.push(`<meta property="og:image:height" content="630">`);
+    }
     lines.push(`<meta name="twitter:card" content="${twitterCard}">`);
     lines.push(`<meta name="twitter:title" content="${ogTitle}">`);
     if (ogDesc) lines.push(`<meta name="twitter:description" content="${ogDesc}">`);
@@ -273,7 +288,11 @@ function buildRegisterMetaTags(config: AppConfig, rootRelative: string): string 
   lines.push(`<meta property="og:title" content="${escapeHtml(ogTitle)}">`);
   lines.push(`<meta property="og:description" content="${escapeHtml(ogDesc)}">`);
   if (domain) lines.push(`<meta property="og:url" content="${escapeHtml(domain + canonicalPath)}">`);
-  if (ogImage) lines.push(`<meta property="og:image" content="${ogImage}">`);
+  if (ogImage) {
+    lines.push(`<meta property="og:image" content="${ogImage}">`);
+    lines.push(`<meta property="og:image:width" content="1200">`);
+    lines.push(`<meta property="og:image:height" content="630">`);
+  }
   lines.push(`<meta name="twitter:card" content="${twitterCard}">`);
   lines.push(`<meta name="twitter:title" content="${escapeHtml(ogTitle)}">`);
   lines.push(`<meta name="twitter:description" content="${escapeHtml(ogDesc)}">`);
