@@ -1,0 +1,138 @@
+# Project Lifecycle
+
+This document defines how notion-doc-publisher-v3 moves from governance setup to ongoing delivery.
+
+## Lifecycle Principles
+
+Every phase must preserve:
+
+- Owner intent.
+- Product identity.
+- Architecture integrity.
+- Secret and production-data safety.
+- Reviewability through branches and pull requests.
+- Validation before confidence.
+- Release safety.
+
+## Current Phase
+
+**Phase 2: Minimal Implementation / Preview Deploy (v0.2.0-preview-deploy)**
+
+Allowed work:
+- Preview/test publishing via GitHub Actions + GitHub Pages.
+- Improvements to validation, build, and write-back logic.
+- Governance adoption.
+- Documentation and test improvements.
+
+Not allowed:
+- Production deployment to docs-arcbos-v2, docs-energize-v2, or other production repositories.
+- PDF automation.
+- Approval workflows.
+- Writes to production repositories.
+
+## Phase 0: Governance Foundation (Completed)
+
+Goal: Establish the local governance system before implementation begins.
+
+Required artifacts:
+- AGENTS.md
+- PROJECT_BOOTSTRAP_PROMPT.md
+- GOVERNANCE_CHECKLIST.md
+- PROJECT_LIFECYCLE.md
+- docs/OWNER_INTENT.md
+- docs/PROJECT_CONTEXT.md
+- docs/PRODUCT_CONSTITUTION.md
+- docs/SYSTEM_ARCHITECTURE.md
+- docs/ENGINEERING_GOVERNANCE.md
+- docs/HTML_PUBLISHING_GOVERNANCE.md
+- .github/workflows/preview-publish.yml
+
+Exit criteria:
+- Governance files exist locally in the repository.
+- Agents can recover context without chat history.
+- Initial governance changes are reviewed through a PR.
+
+## Phase 1: Product and Architecture Definition (Completed)
+
+Goal: Convert the project idea into clear product, domain, and architecture decisions.
+
+Completed artifacts:
+- docs/SYSTEM_BLUEPRINT.md
+- docs/ARCHITECTURE_DECISIONS.md
+- docs/ARCHITECTURE_REVIEW.md
+- docs/DOCUMENT_MODEL.md
+- docs/NOTION_SCHEMA.md
+- docs/OUTPUT_SPEC.md
+
+## Phase 2: Minimal Implementation (Current)
+
+Goal: Build the smallest useful version that proves the core project direction.
+
+Allowed work:
+- Implement the primary build and publish workflow.
+- Add essential validation and regression tests.
+- Add preview deployment via GitHub Actions.
+- Add lightweight operational documentation.
+
+Not allowed:
+- Broad unrelated refactors.
+- Production deployment without explicit approval.
+- Secret or production-data changes without explicit approval.
+
+Exit criteria:
+- Preview publishing works end-to-end.
+- Relevant checks pass or exceptions are documented.
+- Known limitations are explicit.
+- The owner can review the project through PRs.
+
+## Phase 3: Hardening (Upcoming)
+
+Goal: Improve reliability, safety, and maintainability before broader release.
+
+Allowed work:
+- Expand automated tests.
+- Strengthen governance and architecture guards.
+- Improve error handling.
+- Clarify documentation.
+- Remove risky shortcuts from earlier phases.
+
+Exit criteria:
+- Critical paths have test coverage.
+- Failure modes are understood.
+- Release process is documented.
+- Rollback or recovery path is documented.
+
+## Phase 4: Release Readiness (Future)
+
+Goal: Confirm the project is ready for an approved release or deployment to production documentation sites.
+
+Allowed work:
+- Final release checks.
+- Release notes.
+- Deployment plan for production docs sites.
+- Rollback plan.
+- Owner approval record.
+
+AI coding agents must not tag, release, or deploy unless the owner explicitly requests those actions.
+
+## Phase 5: Ongoing Evolution (Future)
+
+Goal: Continue improving the project without eroding its original intent.
+
+Allowed work:
+- Feature additions aligned with the Product Constitution.
+- Architecture improvements aligned with the System Architecture.
+- Governance updates based on real project lessons.
+- Test and guard improvements.
+
+## Stop Conditions
+
+Stop and request owner review if a phase change would:
+
+- Change product identity.
+- Change the primary domain object (Document).
+- Change source-of-truth ownership.
+- Bypass architecture boundaries.
+- Reduce required validation.
+- Require production data, production secrets, deployment, or release actions without explicit approval.
+- Make the project harder for future agents to understand from local repository context.
