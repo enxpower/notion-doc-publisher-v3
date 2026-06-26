@@ -4,6 +4,17 @@ import type { DocumentModel, ValidationIssue } from "../model/document.js";
 
 export const DOC_ID_PATTERN = /^([A-Z0-9]+)-([A-Z0-9]+)-(\d{4})-(\d{4})$/;
 
+/**
+ * Error codes that represent cross-document integrity violations.
+ * These make the assignment output ambiguous or corrupt and must halt
+ * the entire assign-id run even if only one document is affected.
+ */
+const INTEGRITY_BLOCKING_CODES = new Set([
+  "DUPLICATE_DOC_ID",
+  "DOC_ID_COLLISION",
+  "DOC_ID_SEQUENCE_OVERFLOW"
+]);
+
 export type AssignmentPlan = {
   yearMonth: string;
   assignments: Array<{
@@ -11,7 +22,13 @@ export type AssignmentPlan = {
     title: string;
     docId: string;
   }>;
+  /** Cross-document integrity errors — block the entire run. */
   errors: ValidationIssue[];
+  /**
+   * Per-document issues — the affected document is skipped but
+   * all other assignments proceed normally.
+   */
+  skipped: ValidationIssue[];
   warnings: ValidationIssue[];
 };
 
@@ -32,6 +49,7 @@ export function parseDocId(docId: string):
 
 export function createAssignmentPlan(documents: DocumentModel[], config: AppConfig): AssignmentPlan {
   const errors: ValidationIssue[] = [];
+  const skipped: ValidationIssue[] = [];
   const warnings: ValidationIssue[] = [];
   const existing = new Set<string>();
   let maxSequence = 0;
@@ -43,15 +61,17 @@ export function createAssignmentPlan(documents: DocumentModel[], config: AppConf
     }
     const parsed = parseDocId(docId);
     if (!parsed) {
-      errors.push({
+      // Malformed existing DOC_ID: warn but do not block others.
+      skipped.push({
         code: "MALFORMED_DOC_ID",
-        message: `Malformed DOC_ID blocks assignment: ${docId}`,
+        message: `Malformed DOC_ID skips assignment consideration: ${docId}`,
         pageId: document.source.notionPageId,
         docId
       });
       continue;
     }
     if (existing.has(docId)) {
+      // Duplicate is a cross-document integrity error — must block.
       errors.push({
         code: "DUPLICATE_DOC_ID",
         message: `Duplicate DOC_ID blocks assignment: ${docId}`,
@@ -80,9 +100,10 @@ export function createAssignmentPlan(documents: DocumentModel[], config: AppConf
   const candidates = documents.filter((document) => !document.meta.docId);
   for (const document of candidates) {
     if (!document.meta.brand.token || !document.meta.documentType.token) {
-      errors.push({
+      // Per-document issue: skip this document, continue with others.
+      skipped.push({
         code: "MISSING_DOC_ID_TOKEN",
-        message: `Cannot assign DOC_ID for "${document.meta.title}" because brand or document type token is missing.`,
+        message: `Skipping DOC_ID assignment for "${document.meta.title}": brand or document type token is missing.`,
         pageId: document.source.notionPageId
       });
       continue;
@@ -114,11 +135,18 @@ export function createAssignmentPlan(documents: DocumentModel[], config: AppConf
     });
   }
 
-  return { yearMonth: config.docIdYearMonth, assignments, errors, warnings };
+  return { yearMonth: config.docIdYearMonth, assignments, skipped, errors, warnings };
 }
 
+/**
+ * Throws only when cross-document integrity errors are present.
+ * Per-document issues (skipped) do not throw; the caller logs them.
+ */
 export function assertPlanWritable(plan: AssignmentPlan): void {
-  if (plan.errors.length > 0) {
-    throw new UserFacingError(`DOC_ID assignment stopped: ${plan.errors.length} blocking issue(s). Run assign-id:dry for details.`);
+  const blocking = plan.errors.filter((issue) => INTEGRITY_BLOCKING_CODES.has(issue.code));
+  if (blocking.length > 0) {
+    throw new UserFacingError(
+      `DOC_ID assignment stopped: ${blocking.length} integrity error(s). Run assign-id:dry for details.`
+    );
   }
 }

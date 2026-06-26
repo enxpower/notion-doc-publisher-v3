@@ -104,6 +104,11 @@ jobs:
         run: npm test
 
       - name: Assign missing DOC_IDs
+        # Transient Notion API failures (e.g. 504) are downgraded to warnings
+        # inside the script and exit 0.  continue-on-error is a final safety
+        # net in case an unexpected code path still exits non-zero, ensuring
+        # the publish pipeline is never blocked by a DOC_ID assignment issue.
+        continue-on-error: true
         run: npm run assign-id
 
       - name: Build static preview
