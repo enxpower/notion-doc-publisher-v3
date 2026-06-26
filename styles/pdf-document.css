@@ -1,0 +1,385 @@
+/*
+  pdf-document.css — PDF-only sidecar styles.
+
+  Inlined by export-doc-pdf.ts into templates/pdf-document.html at
+  generation time. This file is NEVER referenced by the existing HTML
+  publishing pipeline (screen.css, print.css, enterprise.html remain
+  unchanged).
+
+  Default format: US Letter. Enterprise formal. CJK-safe.
+*/
+
+@page {
+  size: letter;
+  margin-top: 18mm;
+  margin-bottom: 24mm; /* extra clearance for Playwright displayHeaderFooter running footer */
+  margin-left: 18mm;
+  margin-right: 18mm;
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+  box-shadow: none;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background: #ffffff;
+  color: #1a1c20;
+  /* Latin serif first; CJK serif fallbacks for Chinese contracts */
+  font: 10.5pt/1.5 Georgia, "Times New Roman", "Songti SC", "SimSun", "Noto Serif CJK SC", serif;
+}
+
+/* ---- Masthead ------------------------------------------ */
+
+.pdf-masthead {
+  padding-bottom: 4mm;
+  border-bottom: 0.5mm solid #1a1c20;
+  margin-bottom: 7mm;
+}
+
+.pdf-masthead-inner {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10mm;
+}
+
+.pdf-brand {
+  font-family: Arial, Helvetica, "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+  font-size: 9pt;
+  font-weight: 700;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+}
+
+.pdf-tagline {
+  font-family: Arial, Helvetica, "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+  font-size: 6.5pt;
+  font-weight: 700;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: #555555;
+  text-align: right;
+}
+
+/* ---- Title block --------------------------------------- */
+
+.pdf-title-block {
+  margin-bottom: 5mm;
+}
+
+.pdf-kicker {
+  margin: 0 0 3mm;
+  font-family: Arial, Helvetica, "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+  font-size: 7pt;
+  font-weight: 700;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: #555555;
+}
+
+.pdf-title {
+  margin: 0 0 5mm;
+  font-size: 22pt;
+  font-weight: 600;
+  line-height: 1.15;
+  break-after: avoid;
+  page-break-after: avoid;
+  /* Latin sans for title readability; CJK fallbacks */
+  font-family: Arial, Helvetica, "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+}
+
+/* Hero image in title/cover zone — appears only when an image is present */
+.pdf-hero {
+  margin: 5mm 0 6mm;
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.pdf-hero img {
+  max-width: 100%;
+  max-height: 80mm;
+  height: auto;
+  display: block;
+  object-fit: contain;
+}
+
+/* Executive identity line: DOC_ID · Type · Version · Status */
+.pdf-identity {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 1mm;
+  margin-top: 4mm;
+  padding-top: 3mm;
+  border-top: 0.2mm solid #b8b8b8;
+  font-family: Arial, Helvetica, "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+  font-size: 8pt;
+  color: #555555;
+}
+
+.pdf-identity-id {
+  font-weight: 700;
+  color: #1a1c20;
+}
+
+.pdf-sep {
+  margin: 0 1mm;
+  color: #999999;
+}
+
+/* ---- Metadata strip ------------------------------------ */
+
+.pdf-meta {
+  padding: 5mm 0 7mm;
+  border-bottom: 0.2mm solid #b8b8b8;
+  margin-bottom: 7mm;
+}
+
+.pdf-meta-dl {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(55mm, 1fr));
+  gap: 3mm 8mm;
+  margin: 0;
+}
+
+.pdf-meta-dl div {
+  display: block;
+}
+
+.pdf-meta-dl dt {
+  font-family: Arial, Helvetica, "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+  font-size: 6.5pt;
+  font-weight: 700;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: #555555;
+}
+
+.pdf-meta-dl dd {
+  margin: 0;
+  font-family: Arial, Helvetica, "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+  font-size: 9pt;
+  color: #1a1c20;
+}
+
+/* ---- Body content -------------------------------------- */
+
+.pdf-body {
+  font-size: 10.5pt;
+  line-height: 1.5;
+}
+
+.pdf-body p {
+  margin: 0 0 3mm;
+  orphans: 3;
+  widows: 3;
+}
+
+.pdf-body li,
+.pdf-body blockquote,
+.pdf-body .callout,
+.pdf-body .block-warning {
+  orphans: 3;
+  widows: 3;
+}
+
+/* CJK text: strict line-break, justified */
+.pdf-body :lang(zh) p,
+.pdf-body :lang(zh) li,
+.pdf-body :lang(zh) blockquote {
+  line-break: strict;
+  text-align: justify;
+  text-justify: inter-ideograph;
+}
+
+.pdf-body h2,
+.pdf-body h3,
+.pdf-body h4,
+.pdf-body h5 {
+  font-family: Arial, Helvetica, "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+  font-weight: 600;
+  break-after: avoid;
+  page-break-after: avoid;
+}
+
+.pdf-body h2 {
+  margin-top: 9mm;
+  padding-top: 4mm;
+  border-top: 0.2mm solid #dddddd;
+  font-size: 15pt;
+}
+
+.pdf-body h3 {
+  margin-top: 7mm;
+  font-size: 13pt;
+}
+
+.pdf-body h4 {
+  margin-top: 6mm;
+  font-size: 11pt;
+}
+
+.pdf-body h5 {
+  margin-top: 5mm;
+  font-size: 10pt;
+}
+
+.pdf-body h2 + p,
+.pdf-body h3 + p,
+.pdf-body h4 + p {
+  break-before: avoid;
+  page-break-before: avoid;
+}
+
+.pdf-body ul,
+.pdf-body ol {
+  margin: 0 0 3mm;
+  padding-left: 6mm;
+}
+
+.pdf-body li {
+  margin: 0 0 1mm;
+}
+
+.pdf-body a {
+  color: #000000;
+  text-decoration: underline;
+}
+
+.pdf-body blockquote {
+  padding-left: 4mm;
+  border-left: 0.4mm solid #555555;
+  font-style: italic;
+  break-inside: avoid;
+  page-break-inside: avoid;
+  margin: 0 0 3mm;
+}
+
+.pdf-body .callout,
+.pdf-body .block-warning {
+  padding: 2mm 3mm;
+  border: 0.2mm solid #999999;
+  break-inside: avoid;
+  page-break-inside: avoid;
+  margin: 0 0 3mm;
+}
+
+/* Long code blocks may exceed a page; allow breaking but keep short ones intact */
+.pdf-body pre {
+  white-space: pre-wrap;
+  padding: 3mm;
+  border: 0.2mm solid #999999;
+  background: #ffffff;
+  color: #000000;
+  font-size: 8pt;
+  break-inside: auto;
+  orphans: 4;
+  widows: 4;
+  margin: 0 0 3mm;
+}
+
+.pdf-body code {
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.92em;
+}
+
+.pdf-body img {
+  max-width: 100%;
+  height: auto;
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.pdf-body figure {
+  break-inside: avoid;
+  page-break-inside: avoid;
+  margin: 0 0 4mm;
+}
+
+.pdf-body figcaption {
+  margin-top: 2mm;
+  color: #555555;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 8pt;
+}
+
+.pdf-body .file-link a {
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 9pt;
+  color: #000000;
+}
+
+.pdf-body .table-wrap {
+  max-width: 100%;
+  overflow: visible;
+  margin: 0 0 3mm;
+}
+
+.pdf-body table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 8.5pt;
+}
+
+.pdf-body thead {
+  display: table-header-group;
+}
+
+.pdf-body tfoot {
+  display: table-footer-group;
+}
+
+.pdf-body tr {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.pdf-body th,
+.pdf-body td {
+  padding: 1.8mm;
+  border: 0;
+  border-bottom: 0.2mm solid #b8b8b8;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.pdf-body th {
+  color: #555555;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 6.8pt;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.pdf-body hr {
+  border: 0;
+  border-top: 0.2mm solid #dddddd;
+  margin: 5mm 0;
+}
+
+/* ---- Document body footer (last page anchor) ----------- */
+
+.pdf-doc-footer {
+  margin-top: 8mm;
+  padding-top: 3mm;
+  border-top: 0.5mm solid #333333;
+  color: #555555;
+  font-family: Arial, Helvetica, "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.pdf-footer-inner {
+  display: flex;
+  justify-content: space-between;
+  gap: 8mm;
+  font-size: 7pt;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}

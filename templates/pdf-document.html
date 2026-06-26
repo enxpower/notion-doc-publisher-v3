@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>{{title}} — {{docId}}</title>
+    <style>{{inlineCss}}</style>
+  </head>
+  <body>
+    <article class="pdf-doc">
+      <header class="pdf-masthead">
+        <div class="pdf-masthead-inner">
+          <span class="pdf-brand">{{brand}}</span>{{taglineBlock}}
+        </div>
+      </header>
+      <section class="pdf-title-block">
+        <p class="pdf-kicker">{{documentType}}</p>
+        <h1 class="pdf-title">{{title}}</h1>
+        {{heroBlock}}
+        <div class="pdf-identity">{{identityLine}}</div>
+      </section>
+      {{metaSection}}
+      <section class="pdf-body">
+        {{body}}
+      </section>
+      <footer class="pdf-doc-footer">
+        <div class="pdf-footer-inner">
+          <span class="pdf-footer-brand">{{brand}}</span>
+          <span class="pdf-footer-ref">{{footerRef}}</span>
+        </div>
+      </footer>
+    </article>
+  </body>
+</html>
