@@ -42,9 +42,16 @@ export function validateDocuments(documents: DocumentModel[], config: AppConfig)
           warnings.push(issue("DOC_ID_TOKEN_MISMATCH", "DOC_ID brand/type tokens no longer match current metadata.", document));
         }
       }
+
+      // DUPLICATE_DOC_ID: only the later document (the duplicate) gets the error.
+      // The first document seen keeps its DOC_ID and may still be published.
       const previousPageId = seenDocIds.get(document.meta.docId);
       if (previousPageId && previousPageId !== document.source.notionPageId) {
-        errors.push(issue("DUPLICATE_DOC_ID", `Duplicate DOC_ID: ${document.meta.docId}`, document));
+        errors.push(issue(
+          "DUPLICATE_DOC_ID",
+          `Duplicate DOC_ID: ${document.meta.docId} — this document is skipped; the first occurrence will still publish.`,
+          document
+        ));
       }
       seenDocIds.set(document.meta.docId, document.source.notionPageId);
     }
@@ -162,9 +169,15 @@ export function validateDocuments(documents: DocumentModel[], config: AppConfig)
     }
 
     if (document.meta.canonicalPath) {
+      // OUTPUT_PATH_COLLISION: only the later document gets the error.
+      // The first document to claim a path keeps it and may still be published.
       const previousPageId = seenPaths.get(document.meta.canonicalPath.toLowerCase());
       if (previousPageId && previousPageId !== document.source.notionPageId) {
-        errors.push(issue("OUTPUT_PATH_COLLISION", `Output path collision: ${document.meta.canonicalPath}`, document));
+        errors.push(issue(
+          "OUTPUT_PATH_COLLISION",
+          `Output path collision: ${document.meta.canonicalPath} — this document is skipped; the first occurrence will still publish.`,
+          document
+        ));
       }
       seenPaths.set(document.meta.canonicalPath.toLowerCase(), document.source.notionPageId);
     }

@@ -4,7 +4,7 @@ import { copyDocumentAssets, copyStyles } from "../assets/copy-assets.js";
 import { loadConfigOrThrow, runCli } from "../config.js";
 import { VALID_PRIVATE_LINK_NAMESPACES, isPrivateLinkVisibility, normalizeVisibility } from "../model/document.js";
 import { renderDocumentHtml, renderDocsRootHtml, renderIndexHtml, renderNamespaceRootHtml } from "../render/render-html.js";
-import { autoFillDocuments, buildBlockers, createReport, hasBuildBlockingErrors, loadDocuments, publishableDocuments, validateLoadedDocuments, writeJson } from "./shared.js";
+import { autoFillDocuments, createReport, loadDocuments, publishableDocuments, skippedDueToErrors, validateLoadedDocuments, writeJson } from "./shared.js";
 import { isPublicIndexListed, isPublishableCandidate } from "../validate/validate.js";
 
 await runCli(async () => {
@@ -57,23 +57,21 @@ await runCli(async () => {
   for (const document of candidates) {
     await copyDocumentAssets(document, "dist");
   }
+
   validateLoadedDocuments(documents, config);
   const report = createReport(documents);
   await writeJson("dist/reports/validation-report.json", report);
 
-  if (hasBuildBlockingErrors(documents, config)) {
-    await writeJson("dist/reports/build-report.json", report);
-    const blockers = buildBlockers(documents, config);
-    console.error(`Build stopped: ${blockers.length} document(s) eligible for publishing have blocking errors.`);
-    for (const blocker of blockers) {
-      console.error(`  - ${blocker.title} [${blocker.docId}]`);
-      for (const reason of blocker.reasons) {
-        console.error(`      ${reason}`);
-      }
+  // Documents with validation errors are skipped — not built, not deployed.
+  // They are written back to Notion as failed by writeback-preview.
+  // All other publishable documents proceed normally.
+  const skipped = skippedDueToErrors(documents, config);
+  if (skipped.length > 0) {
+    console.warn(`[WARN] ${skipped.length} document(s) skipped due to validation errors (other documents will still publish):`);
+    for (const doc of skipped) {
+      const reasons = doc.validation.errors.map((e) => `${e.code}: ${e.message}`).join("; ");
+      console.warn(`  - ${doc.meta.title || "(untitled)"} [${doc.meta.docId || "(no DOC_ID)"}]: ${reasons}`);
     }
-    console.error("Drafts and non-publishable documents do not block the build; fix the documents listed above or uncheck Publish.");
-    process.exitCode = 1;
-    return;
   }
 
   const published = publishableDocuments(documents, config);
@@ -175,5 +173,5 @@ await runCli(async () => {
 
   const buildReport = createReport(published);
   await writeJson("dist/reports/build-report.json", buildReport);
-  console.log(`Built ${published.length} document(s) into dist/.`);
+  console.log(`Built ${published.length} document(s) into dist/. Skipped ${skipped.length} document(s) with errors.`);
 });
