@@ -17,6 +17,7 @@ import type { AppConfig } from "../config.js";
 import { createAssignmentPlan, parseDocId } from "../doc-id/generator.js";
 import { emptyValidation, type DocumentModel } from "../model/document.js";
 import { isPublicIndexListed, isPublishableCandidate, validateDocuments } from "../validate/validate.js";
+import { publishableDocuments, skippedDueToErrors } from "../cli/shared.js";
 import { lintSecurityConfig } from "../cli/security-lint.js";
 
 function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
@@ -120,11 +121,18 @@ test("public index lists ONLY Public + Portal Listed documents", () => {
 
 /* ---------------- Validation rules ---------------- */
 
-test("duplicate DOC_ID across different pages is a blocking error", () => {
+test("duplicate DOC_ID: only the later document gets the error, first still publishes", () => {
+  const config = makeConfig();
   const a = makeDoc({}, "page-a");
   const b = makeDoc({}, "page-b");
-  validateDocuments([a, b], makeConfig());
+  validateDocuments([a, b], config);
+  // First occurrence: no error, still publishable
+  assert.equal(a.validation.errors.length, 0);
+  assert.equal(publishableDocuments([a, b], config)[0]!.source.notionPageId, "page-a");
+  // Second (duplicate): gets the error and is skipped
   assert.ok(b.validation.errors.some((e) => e.code === "DUPLICATE_DOC_ID"));
+  assert.equal(skippedDueToErrors([a, b], config).length, 1);
+  assert.equal(skippedDueToErrors([a, b], config)[0]!.source.notionPageId, "page-b");
 });
 
 test("invalid Share Token is a blocking error; short-but-valid is a warning", () => {
@@ -143,11 +151,18 @@ test("unsafe link protocols are blocked", () => {
   assert.ok(doc.validation.errors.some((e) => e.code === "UNSAFE_LINK"));
 });
 
-test("output path collisions across pages are blocked", () => {
+test("output path collision: only the later document is skipped, first still publishes", () => {
+  const config = makeConfig();
   const a = makeDoc({}, "page-a");
+  // page-b shares the same canonicalPath as page-a
   const b = makeDoc({ docId: "ARCBOS-SPEC-2606-0002" }, "page-b");
-  validateDocuments([a, b], makeConfig());
+  validateDocuments([a, b], config);
+  // First document: no error
+  assert.equal(a.validation.errors.length, 0);
+  // Second document: gets the collision error and is excluded from published output
   assert.ok(b.validation.errors.some((e) => e.code === "OUTPUT_PATH_COLLISION"));
+  assert.equal(publishableDocuments([a, b], config).length, 1);
+  assert.equal(publishableDocuments([a, b], config)[0]!.source.notionPageId, "page-a");
 });
 
 /* ---------------- Security lint ---------------- */
