@@ -85,11 +85,14 @@ test("assignment plan blocks on duplicate existing DOC_IDs", () => {
   assert.ok(plan.errors.some((e) => e.code === "DUPLICATE_DOC_ID"));
 });
 
-test("assignment plan blocks when brand or type token is missing", () => {
+test("assignment plan skips (not blocks) when brand or type token is missing", () => {
   const doc = makeDoc({ docId: "", brand: { label: "X", token: "", slug: "x" } }, "page-x");
   const plan = createAssignmentPlan([doc], makeConfig());
-  assert.ok(plan.errors.some((e) => e.code === "MISSING_DOC_ID_TOKEN"));
-  assert.equal(plan.assignments.length, 0);
+  // MISSING_DOC_ID_TOKEN is a per-document skip, not a global integrity error.
+  // It must NOT appear in errors (which would block ALL assignments).
+  assert.equal(plan.errors.length, 0, "must not be a blocking integrity error");
+  assert.ok(plan.skipped.some((e) => e.code === "MISSING_DOC_ID_TOKEN"), "must appear in skipped");
+  assert.equal(plan.assignments.length, 0, "affected document must not receive an assignment");
 });
 
 /* ---------------- Publishability ---------------- */
