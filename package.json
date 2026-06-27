@@ -17,12 +17,15 @@
     "publish:preview": "npm run assign-id && npm run build && npm run ci:writeback",
     "test": "tsc && node --test \".tmp/tests/\"*.test.js",
     "lint:security": "tsc && node .tmp/cli/security-lint.js",
-    "pdf": "tsc && node .tmp/cli/export-pdf.js"
+    "pdf": "tsc && node .tmp/cli/export-pdf.js",
+    "docx:doc": "tsc && node .tmp/cli/export-doc-docx.js",
+    "pdf:from-docx": "tsc && node .tmp/cli/convert-docx-to-pdf.js"
   },
   "devDependencies": {
     "@types/node": "^20.12.12",
+    "docx": "^9.7.1",
+    "playwright": "^1.49.0",
     "tsx": "^4.19.2",
-    "typescript": "^5.6.3",
-    "playwright": "^1.49.0"
+    "typescript": "^5.6.3"
   }
 }
