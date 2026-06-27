@@ -1,84 +1,62 @@
-# notion-doc-publisher-v3
+# Notion Doc Publisher V3
 
-A clean V3 Notion-to-static-document publisher.
+Enterprise Notion-to-static-document publisher for serious company documents.
 
-Core principle:
+This repository turns selected Notion database records into polished static HTML documents and generated PDF downloads. Notion remains the editing source; GitHub Actions handles validation, build, static publishing, PDF generation, and controlled write-back.
 
-- Notion is the only editing source
-- `validate` and `build` are read-only with respect to Notion
-- `DOC_ID` assignment happens only through `npm run assign-id`
-- Output is static HTML first
-- Print/PDF quality is a first-class requirement
-- Existing V2 systems must not be modified
+## Production model
 
-## Setup
+Core rules:
 
-```sh
-npm install
-cp .env.example .env
+- Notion is the only editing source.
+- `validate` and `build` do not write to Notion.
+- `DOC_ID` assignment happens only through `npm run assign-id` or the approved publish workflow.
+- Static HTML is the primary published artifact.
+- PDF export is generated from the same document model and published beside HTML.
+- PDF download links are relative paths, not hardcoded domains.
+- Existing V2 systems are not modified.
+- Production workflow changes require explicit owner approval.
+
+## What gets published
+
+For each eligible document, the publisher writes:
+
+```text
+dist/docs/{DOC_ID}/index.html
+dist/pdf/{DOC_ID}.pdf
+dist/assets/docs/{DOC_ID}/...
+dist/reports/build-report.json
+dist/reports/validation-report.json
 ```
 
-Fill in `NOTION_TOKEN` and `NOTION_DATABASE_ID` for a development Notion database. Do not use production V2 database IDs for initial development.
+The document page includes:
 
-Configure `PUBLISHABLE_STATUSES`, `BRAND_TOKENS_JSON`, and `DOCUMENT_TYPE_TOKENS_JSON` for your database. The implementation does not ship with built-in brand or document type token assumptions.
+- enterprise masthead and title block;
+- 2-row metadata grid for document attributes;
+- Print button using browser print;
+- Download PDF button linking to `/pdf/{DOC_ID}.pdf`;
+- responsive static HTML body;
+- formal print stylesheet for browser print;
+- generated Typst PDF for direct download.
 
-## Local Workflow
+## Required Notion fields
 
-```sh
-npm install
-cp .env.example .env
-# Fill in Notion variables and token maps in .env
-npm run assign-id:dry
-npm run assign-id
-npm run validate
-npm run build
-npm run preview
-npm run publish:preview
-```
+The exact database property names are environment/config dependent, but the production database must support these concepts:
 
-## Commands
+### Publishing fields
 
-```sh
-npm run validate
-npm run build
-npm run assign-id:dry
-npm run assign-id
-npm run preview
-npm run clean
-npm run smoke
-```
+| Field purpose | Typical property |
+| --- | --- |
+| Publish toggle | `Publish` |
+| Document ID | `DOC_ID` |
+| Status | `Status` |
+| Visibility / access | `Visibility` or equivalent |
+| Brand | `Brand` |
+| Document type | document type select |
+| Client | client property |
+| Project | project property |
 
-`validate` reads Notion and writes `dist/reports/validation-report.json`.
-
-`build` reads Notion, copies local assets for publishable documents, and writes local static output under `dist/`:
-
-- `dist/docs/{DOC_ID}/index.html`
-- `dist/assets/docs/{DOC_ID}/...`
-- `dist/reports/build-report.json`
-- `dist/reports/validation-report.json`
-
-`assign-id:dry` creates `dist/reports/assign-id-report.json` without writing to Notion.
-
-`assign-id` is the only command that writes `DOC_ID` values to Notion. It re-queries before writing and fails on conflicts.
-
-After `npm run build`, run `npm run preview` and open `http://localhost:4173/`. Override the port with `PORT=5000 npm run preview`. Press `Ctrl+C` to stop the preview server.
-
-`clean` removes local `dist/`.
-
-`publish:preview` is intended for preview/test publishing. It assigns missing IDs, builds `dist/`, and writes preview results back to Notion. It does not deploy by itself; GitHub Actions handles preview deployment when explicitly enabled.
-
-## Preview GitHub Actions Publishing
-
-Preview publishing is test-only. Do not point it at production repositories or production Notion databases.
-
-Workflow:
-
-1. A user edits a document in Notion.
-2. The user sets `Status` to a publishable status, `Visibility` to an allowed visibility, and checks `Publish`.
-3. The `Preview Publish` GitHub Actions workflow runs manually, on schedule, or after code changes on `main`.
-4. The workflow assigns missing `DOC_ID` values, builds `dist/`, optionally deploys to this repository's GitHub Pages preview target, and writes results back to Notion.
-
-Required Notion write-back fields:
+### HTML write-back fields
 
 | Field | Type |
 | --- | --- |
@@ -88,62 +66,132 @@ Required Notion write-back fields:
 | `BUILD_MESSAGE` | `rich_text` |
 | `LAST_BUILD_RUN` | `rich_text` |
 
-Required GitHub secret:
+### PDF Publisher 2.0 write-back fields
 
-- `NOTION_TOKEN`
-
-Required GitHub variables or secrets:
-
-- `NOTION_DATABASE_ID`
-- `ALLOWED_VISIBILITY`
-- `PUBLISHABLE_STATUSES`
-- `BRAND_TOKENS_JSON`
-- `DOCUMENT_TYPE_TOKENS_JSON`
-- `PREVIEW_DEPLOY_ENABLED`
-- `PREVIEW_BASE_URL`
-
-Set `PREVIEW_DEPLOY_ENABLED=true` only for a test GitHub Pages target. `PREVIEW_BASE_URL` must be the public base URL, for example:
-
-```text
-https://enxpower.github.io/notion-doc-publisher-v3
-```
-
-Published URLs are written as:
-
-```text
-${PREVIEW_BASE_URL}/docs/{DOC_ID}/
-```
-
-If `PREVIEW_DEPLOY_ENABLED` is not `true`, the workflow builds and writes skipped preview messages to Notion but does not deploy.
-
-To run manually, open GitHub Actions, select `Preview Publish`, and choose `Run workflow`.
-
-## Layout and Paper System
-
-The default document format is **US Letter**. Print output is defined by
-`@page { size: letter; }` in `styles/print.css` and must not be changed to A4.
-
-The register page (`.site-index`) and individual document pages (`.document`)
-share one **shared paper system** defined as CSS variables in
-`styles/screen.css`:
-
-| Variable | Purpose |
+| Field | Type |
 | --- | --- |
-| `--paper-width` | Outer sheet width, shared by the register and documents |
-| `--paper-padding-x` / `--paper-padding-y` | Page margins |
-| `--document-measure` | Readable prose column, narrower than the sheet |
+| `Generate PDF` | `checkbox` |
+| `PDF Status` | `select` |
+| `PDF URL` | `url` |
+| `PDF Generated At` | `date` |
+| `PDF Error` | `rich_text` |
 
-Page furniture (masthead, title block, metadata, footer, register table) uses
-the full paper width. Long-form prose is constrained to `--document-measure`
-for a comfortable line length, while tables, figures, and code may break out to
-the full content width. The UI/furniture layer uses a system sans-serif; the
-document body uses a readable serif suitable for formal documents.
+## Setup
 
-## Branding (brand-neutral)
+```sh
+npm install
+cp .env.example .env
+```
 
-The system supports documents for multiple companies. Branding is **not**
-hardcoded. The masthead brand comes from the Notion `Brand` value; an optional
-display name and tagline come from `config/brands.json`:
+Fill in the required Notion and publishing configuration:
+
+```text
+NOTION_TOKEN=
+NOTION_DATABASE_ID=
+ALLOWED_VISIBILITY=
+PUBLISHABLE_STATUSES=
+BRAND_TOKENS_JSON=
+DOCUMENT_TYPE_TOKENS_JSON=
+PREVIEW_DEPLOY_ENABLED=
+PREVIEW_BASE_URL=
+```
+
+Brand profiles are optional and read from `config/brands.json` unless `BRAND_PROFILES_PATH` is set.
+
+## Commands
+
+```sh
+npm run check
+npm test
+npm run lint:security
+npm run validate
+npm run build
+npm run preview
+npm run assign-id:dry
+npm run assign-id
+npm run publish:preview
+npm run pdf:export -- <DOC_ID>
+npm run pdf:queue -- <DOC_ID>
+npm run pdf:queue -- ALL
+npm run pdf:site
+npm run clean
+```
+
+### Main commands
+
+| Command | Purpose |
+| --- | --- |
+| `npm run check` | TypeScript check only |
+| `npm test` | Run regression tests |
+| `npm run lint:security` | Static safety checks |
+| `npm run validate` | Read Notion and write validation report locally |
+| `npm run build` | Build static HTML under `dist/` |
+| `npm run preview` | Serve local preview after build |
+| `npm run assign-id:dry` | Report missing IDs without writing to Notion |
+| `npm run assign-id` | Assign missing `DOC_ID` values to Notion |
+| `npm run publish:preview` | Assign IDs, build, and write preview result fields |
+| `npm run pdf:export -- <DOC_ID>` | Generate one Typst/PDF export sidecar output |
+| `npm run pdf:queue -- <DOC_ID>` | Run PDF Publisher 2.0 for one document |
+| `npm run pdf:queue -- ALL` | Run PDF Publisher 2.0 for queued documents |
+| `npm run pdf:site` | Generate PDFs for all built site documents |
+
+`npm run preview` opens the local build at `http://localhost:4173/` by default. Override with `PORT=5000 npm run preview`.
+
+## GitHub Actions workflows
+
+### Preview Publish
+
+Primary production publishing path.
+
+Flow:
+
+1. User edits a document in Notion.
+2. User sets publishable status, allowed visibility, and checks the publish toggle.
+3. `Preview Publish` runs manually, on schedule, or after code changes on `main`.
+4. The workflow assigns missing `DOC_ID` values where approved.
+5. It validates and builds static HTML.
+6. It generates site PDFs with `npm run pdf:site`.
+7. It deploys static output when deployment is enabled.
+8. It writes build status and published URLs back to Notion.
+
+PDF generation in this workflow is site-side and automatic. Published document pages include a Download PDF button after the workflow completes successfully.
+
+### PDF Publisher 2.0
+
+Queue/write-back workflow for explicit Notion PDF generation fields.
+
+Typical use:
+
+- Set `Generate PDF` to checked in Notion.
+- Run `PDF Publisher 2.0` manually for one `DOC_ID` or `ALL`.
+- If write-back is enabled, the workflow updates `PDF Status`, `PDF URL`, `PDF Generated At`, and `PDF Error`.
+- Already generated documents are skipped by the queue guard.
+
+This workflow is isolated from HTML publishing and does not deploy the site.
+
+### PDF Export Sidecar / QA workflows
+
+Manual QA workflows are retained for safe PDF testing and artifact inspection. They are not the primary production publishing path.
+
+## Layout system
+
+The document page uses one consistent full paper content width.
+
+- Masthead and title define the master width.
+- Metadata grid, action buttons, TOC, headings, paragraphs, tables, code, and figures align to that same content width.
+- The old narrow `--document-measure` prose constraint is not used for document pages.
+- The header metadata is a clean 2-row × 4-column grid:
+  - Row 1: Document ID, Type, Version, Status.
+  - Row 2: Client, Project, Updated, Access.
+- Extra horizontal divider lines around the metadata/actions/TOC area are intentionally removed.
+- Tables, code blocks, and figures remain full-width and responsive.
+- Mobile layout collapses metadata to 2 columns and then 1 column, with no horizontal scrolling.
+
+## Branding
+
+Branding is brand-neutral and driven by Notion/configuration.
+
+The masthead brand comes from the Notion `Brand` value. Optional display name and tagline come from `config/brands.json`:
 
 ```json
 {
@@ -153,47 +201,65 @@ display name and tagline come from `config/brands.json`:
 }
 ```
 
-A brand's tagline is only shown when it is non-empty, so the ARCBOS slogan
-appears only for ARCBOS documents. Brands without a profile fall back to the
-raw Notion `Brand` label and show no tagline. The file is optional; if it is
-missing or malformed the masthead stays cleanly neutral. An alternate path can
-be set with `BRAND_PROFILES_PATH`. The file is committed and read at build
-time, so CI needs no additional secrets.
+If a brand has no profile, the publisher falls back to the raw Notion brand label and shows no tagline. CI does not need extra secrets for committed brand profiles.
+
+## PDF system
+
+There are two PDF paths:
+
+1. **Site PDF**: `npm run pdf:site` generates `/pdf/{DOC_ID}.pdf` for published site documents. This is the product path used by the Download PDF button.
+2. **Queue PDF**: `npm run pdf:queue` reads Notion queue fields and optionally writes PDF status/link fields back to Notion.
+
+PDF output uses Typst. In GitHub Actions, Typst and CJK/Latin fonts are installed by the workflow. Locally, install Typst before compiling PDFs:
+
+```sh
+brew install typst
+```
+
+If Typst is missing locally, the exporter may still write `.typ` source and skip final PDF compilation depending on the command and mode.
 
 ## Printing
 
-Each document page includes a **Print / Save as PDF** button that calls
-`window.print()`. The print stylesheet (`styles/print.css`) renders a formal
-Letter-sized document: web-only chrome (`.document-actions`, `.no-print`) is
-hidden, the masthead and footer are preserved, headings avoid being stranded,
-and tables, images, and code are kept from clipping.
+Each document page includes a Print button that calls `window.print()`.
 
-## Validation severity
+The print stylesheet renders a formal Letter-sized document:
 
-Validation keeps publishing disciplined without letting one bad draft block
-everything:
+- `@page { size: letter; }`;
+- web-only chrome hidden;
+- masthead and footer preserved;
+- headings protected from being stranded;
+- tables, images, and code protected from clipping.
 
-- A document **eligible for publishing** (Publish checked, publishable Status,
-  allowed Visibility) must pass validation; any error on such a document is
-  build-blocking.
-- **Cross-document integrity** errors (duplicate `DOC_ID`, output path
-  collision) are always build-blocking.
-- Quality problems on **drafts or non-publishable** documents are reported but
-  never block the valid, publishable documents from building and deploying.
+Do not switch the default print format to A4 without explicit owner approval.
 
-The build prints the exact title, `DOC_ID`, and reason for each blocking
-document. Per-document results are written back to Notion as `success`,
-`skipped` (with a concrete reason such as `Skipped: Status "Draft" is not
-configured for publishing.`), or `failed`.
+## Validation and blocking rules
 
-## Boundaries
+Validation keeps publishing disciplined without allowing bad drafts to block good publishable documents.
 
-v0.2.0 adds preview/test deployment only. It does not add PDF automation,
-approval workflow, production deployment, or writes to production repositories.
+- A publishable document must pass validation.
+- Errors on publishable documents block that document.
+- Cross-document integrity errors, such as duplicate `DOC_ID` or output path collision, are always build-blocking.
+- Draft or non-publishable document quality problems are reported but do not block valid publishable documents.
 
-## AI / Governance Operating Rules
+Build and validation reports identify title, `DOC_ID`, and concrete failure/skipped reasons.
 
-- AI agents must read `AGENTS.md` first before doing any work in this repository.
+## Safety boundaries
+
+Do not bypass these boundaries:
+
+- Do not hardcode current or temporary domains in generated HTML, PDF links, manifests, tests, or docs.
+- Use relative paths for site assets and PDF links unless a canonical domain is explicitly approved.
+- Do not modify Notion except through approved write-back commands/workflows.
+- Do not change deployment workflows without explicit owner approval.
+- Do not touch V2 systems from this repository.
+- Do not change PDF/write-back behavior as part of layout-only fixes.
+- Do not change layout/body rendering as part of PDF-only fixes.
+- Do not merge unreviewed workflow changes into `main`.
+
+## AI / governance operating rules
+
+- AI agents must read `AGENTS.md` before doing any work in this repository.
 - AI agents must read governance documents in `docs/` before coding.
-- HTML and static publishing work must read `docs/HTML_PUBLISHING_GOVERNANCE.md`.
-- No deploy, secret, Notion write, workflow, or publishing behavior changes without explicit owner approval.
+- HTML/static publishing work must read `docs/HTML_PUBLISHING_GOVERNANCE.md`.
+- PDF work must keep site publishing, queue write-back, and sidecar QA paths clearly separated.
+- Any deploy, secret, Notion write, workflow, or publishing behavior change requires explicit owner approval.
