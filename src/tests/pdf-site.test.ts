@@ -197,3 +197,34 @@ test("render-html.ts passes renderActions output through the actions template sl
     "renderDocumentHtml must pass renderActions() result to the actions template slot"
   );
 });
+
+// ── 16. .document-actions must not use float ──────────────────────────────────
+
+test(".document-actions CSS must not use float (float would cause body text to wrap beside buttons)", async () => {
+  const src = await fs.readFile(path.resolve("styles/screen.css"), "utf8");
+  const ruleStart = src.indexOf(".document-actions {");
+  const ruleEnd = src.indexOf("}", ruleStart);
+  assert.ok(ruleStart >= 0, ".document-actions rule must exist in screen.css");
+  const rule = src.slice(ruleStart, ruleEnd + 1);
+  assert.ok(
+    !rule.includes("float:") && !rule.includes("float :"),
+    ".document-actions must not use float — float causes body paragraphs to wrap beside the button row"
+  );
+});
+
+// ── 17. .document-actions must be an explicit full-width block ────────────────
+
+test(".document-actions CSS must include width: 100% and clear: both to guarantee full-width block layout", async () => {
+  const src = await fs.readFile(path.resolve("styles/screen.css"), "utf8");
+  const ruleStart = src.indexOf(".document-actions {");
+  const ruleEnd = src.indexOf("}", ruleStart);
+  const rule = src.slice(ruleStart, ruleEnd + 1);
+  assert.ok(
+    rule.includes("width: 100%"),
+    ".document-actions must declare width: 100% to prevent shrink-wrap beside document body"
+  );
+  assert.ok(
+    rule.includes("clear: both"),
+    ".document-actions must declare clear: both to clear any upstream floats"
+  );
+});
