@@ -227,3 +227,36 @@ test("queue.ts imports from notion-writeback, not from writeback.ts preview modu
     "queue.ts must not use the preview NotionWriteback class"
   );
 });
+
+// ── 16. pdfPath=null (Typst absent) is treated as failure, not success ────────
+
+test("queue treats pdfPath=null (Typst not installed) as failure, not Generated", async () => {
+  const src = await fs.readFile(path.resolve("src/pdf/queue.ts"), "utf8");
+
+  // The queue must explicitly check for pdfPath === null after export.
+  assert.ok(
+    src.includes("pdfPath === null"),
+    "queue.ts must guard against pdfPath === null"
+  );
+
+  // When pdfPath is null it must throw (routes to the failure catch path),
+  // never reaching the 'Generated' writeback.
+  const nullCheckIdx = src.indexOf("pdfPath === null");
+  const throwIdx = src.indexOf("throw new Error", nullCheckIdx);
+  const generatedIdx = src.indexOf('"Generated"', nullCheckIdx);
+
+  assert.ok(throwIdx >= 0, "queue.ts must throw when pdfPath is null");
+  // The throw must come before any 'Generated' status write after the null check.
+  assert.ok(
+    throwIdx < generatedIdx || generatedIdx === -1 ||
+    generatedIdx < nullCheckIdx,
+    "queue.ts must not reach 'Generated' writeback when pdfPath is null — throw comes first"
+  );
+
+  // The failure message must mention Typst so the operator knows what to fix.
+  const throwSection = src.slice(throwIdx, throwIdx + 400);
+  assert.ok(
+    throwSection.includes("Typst"),
+    "failure message when pdfPath=null must mention Typst"
+  );
+});

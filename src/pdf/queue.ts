@@ -165,6 +165,16 @@ export async function runPdfQueue(
       // 4c. Export
       const { typPath, pdfPath } = await exportDocumentTypst(doc, config, outDir);
 
+      // Typst binary absent → .typ written but no PDF compiled; treat as failure so
+      // Generate PDF stays checked and the operator can install Typst and retry.
+      if (pdfPath === null) {
+        throw new Error(
+          "Typst is not installed — .typ source written but PDF was not compiled.\n" +
+          `  Source: ${typPath}\n` +
+          "  Install Typst and rerun, or use the manual pdf:export command locally.",
+        );
+      }
+
       const generatedAt = new Date().toISOString();
 
       // 4d. Success writeback
@@ -200,7 +210,7 @@ export async function runPdfQueue(
         url: runUrl,
         error: null,
       };
-      console.log(`[PDF Queue] Done: ${label} → ${pdfPath ?? typPath}`);
+      console.log(`[PDF Queue] Done: ${label} → ${pdfPath}`);
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
       console.error(`[PDF Queue] FAILED: ${label}\n  ${errorMsg}`);
