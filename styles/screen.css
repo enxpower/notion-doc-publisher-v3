@@ -350,7 +350,10 @@ dd {
 .document-actions {
   display: flex;
   justify-content: flex-end;
+  align-items: center;
   gap: 8px;
+  width: 100%;
+  clear: both;
   margin-top: 14px;
 }
 
