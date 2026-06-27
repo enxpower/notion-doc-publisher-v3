@@ -72,7 +72,9 @@ jobs:
         run: npm run lint:security
 
       - name: Run PDF queue
-        run: npm run pdf:queue -- ${{ inputs.doc_id }}
+        env:
+          PDF_DOC_ID: ${{ inputs.doc_id }}
+        run: npm run pdf:queue -- "$PDF_DOC_ID"
 
       - name: Upload PDF artifacts
         if: always()

@@ -58,14 +58,15 @@ export function buildRunUrl(
 // ── Queue scanning ────────────────────────────────────────────────────────────
 
 /**
- * Returns all pages in the database that have `Generate PDF = true`.
+ * Returns pages that are ready to process: Generate PDF = true AND PDF Status != Generated.
+ * Pages already marked Generated are skipped so a re-run of ALL never reprocesses them.
  * Does NOT fetch blocks — only reads page-level properties.
  */
 export async function queryPdfQueue(config: AppConfig): Promise<QueueEntry[]> {
   const client = new NotionClient(config);
   const pages = await client.queryDatabase();
   return pages
-    .filter((p) => readCheckboxProp(p, "Generate PDF"))
+    .filter((p) => readCheckboxProp(p, "Generate PDF") && readSelectProp(p, "PDF Status") !== "Generated")
     .map((p) => ({
       pageId: p.id,
       docId: readRichTextProp(p, "DOC_ID"),
@@ -121,7 +122,7 @@ export async function runPdfQueue(
     ];
   } else {
     entries = allPages
-      .filter((p) => readCheckboxProp(p, "Generate PDF"))
+      .filter((p) => readCheckboxProp(p, "Generate PDF") && readSelectProp(p, "PDF Status") !== "Generated")
       .map((p) => ({
         pageId: p.id,
         docId: readRichTextProp(p, "DOC_ID"),
@@ -130,7 +131,7 @@ export async function runPdfQueue(
       }));
 
     if (entries.length === 0) {
-      console.log("[PDF Queue] No pages have 'Generate PDF' checked. Nothing to do.");
+      console.log("[PDF Queue] No pages are queued (Generate PDF=true and PDF Status!=Generated). Nothing to do.");
       const report: QueueReport = { mode, writeback, results: [] };
       await writeReport(report, outDir);
       return report;

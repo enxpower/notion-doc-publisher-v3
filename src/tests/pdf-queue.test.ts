@@ -228,7 +228,50 @@ test("queue.ts imports from notion-writeback, not from writeback.ts preview modu
   );
 });
 
-// ── 16. pdfPath=null (Typst absent) is treated as failure, not success ────────
+// ── 16. ALL mode excludes PDF Status = Generated ─────────────────────────────
+
+test("ALL mode skips pages whose PDF Status is already Generated", async () => {
+  const src = await fs.readFile(path.resolve("src/pdf/queue.ts"), "utf8");
+
+  // Both the exported queryPdfQueue helper and the runPdfQueue ALL-mode filter
+  // must include the != "Generated" guard alongside the Generate PDF check.
+  const allModeFilter = src.match(
+    /readCheckboxProp\(p,\s*"Generate PDF"\)[^\n]*"Generated"/g,
+  );
+  assert.ok(
+    allModeFilter && allModeFilter.length >= 2,
+    "queue.ts must guard against PDF Status=Generated in both queryPdfQueue and runPdfQueue ALL mode"
+  );
+});
+
+// ── 17. Workflow passes doc_id via env var, not direct interpolation ──────────
+
+test("pdf-publisher.yml passes doc_id via env variable, not bare interpolation", async () => {
+  const src = await fs.readFile(
+    path.resolve(".github/workflows/pdf-publisher.yml"),
+    "utf8",
+  );
+
+  // Must NOT inject inputs.doc_id directly into the shell command string.
+  assert.ok(
+    !src.includes("-- ${{ inputs.doc_id }}"),
+    "workflow must not interpolate inputs.doc_id directly into shell command"
+  );
+
+  // Must pass through an env variable instead.
+  assert.ok(
+    src.includes("PDF_DOC_ID: ${{ inputs.doc_id }}"),
+    "workflow must assign inputs.doc_id to PDF_DOC_ID env var"
+  );
+
+  // The shell command must reference the env var with quoting.
+  assert.ok(
+    src.includes('"$PDF_DOC_ID"'),
+    'workflow shell command must use quoted "$PDF_DOC_ID"'
+  );
+});
+
+// ── 19. pdfPath=null (Typst absent) is treated as failure, not success ────────
 
 test("queue treats pdfPath=null (Typst not installed) as failure, not Generated", async () => {
   const src = await fs.readFile(path.resolve("src/pdf/queue.ts"), "utf8");
