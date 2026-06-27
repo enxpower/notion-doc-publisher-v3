@@ -260,14 +260,14 @@ test("P0-2: header version does not produce double-v prefix", async () => {
   assert.ok(xml.includes("v1.0"), 'Header XML must contain the version string "v1.0"');
 });
 
-test("P1-1: DOCX document XML contains eastAsia font attributes", async () => {
+test("P1-1: DOCX document XML contains eastAsia font attributes (Noto CJK)", async () => {
   const doc = makeTestDoc();
   const buf = await renderDocumentDocx(doc, makeTestConfig());
   const xml = await extractDocxXml(buf, "word/document.xml");
   assert.ok(xml.includes("w:eastAsia="), "document.xml must contain w:eastAsia font attributes");
   assert.ok(
-    xml.includes("Songti SC") || xml.includes("PingFang SC"),
-    "document.xml must reference a CJK font by name"
+    xml.includes("Noto Serif CJK SC") || xml.includes("Noto Sans CJK SC"),
+    "document.xml must reference a Noto CJK font — cross-platform replacement for macOS-only Songti/PingFang"
   );
 });
 
@@ -281,4 +281,83 @@ test("P1-2: quote block runs do not suppress italics", async () => {
   const xml = await extractDocxXml(buf, "word/document.xml");
   assert.ok(!xml.includes('<w:i w:val="false"/>'), 'Must not suppress italics with w:val="false"');
   assert.ok(!xml.includes('<w:i w:val="0"/>'), 'Must not suppress italics with w:val="0"');
+});
+
+// ---------------------------------------------------------------------------
+// Phase A + B — layout, font, and style system regression tests
+// ---------------------------------------------------------------------------
+
+test("Phase-A: QA workflow installs fonts-liberation and fonts-noto-cjk", () => {
+  const src = readFileSync(".github/workflows/docx-pdf-export-qa.yml", "utf8");
+  assert.ok(src.includes("fonts-liberation"), "QA workflow must install fonts-liberation");
+  assert.ok(src.includes("fonts-noto-cjk"), "QA workflow must install fonts-noto-cjk");
+});
+
+test("Phase-B: page header uses paragraph-based layout with right tab stop (no table)", async () => {
+  const buf = await renderDocumentDocx(makeTestDoc(), makeTestConfig());
+  const xml = await extractDocxXml(buf, "word/header1.xml");
+  assert.ok(!xml.includes("<w:tbl>") && !xml.includes("<w:tbl "), "Page header must not contain a <w:tbl> element");
+  assert.ok(xml.includes('w:val="right"'), "Page header must declare a right-aligned tab stop");
+});
+
+test("Phase-B: masthead and metadata strip source does not instantiate Table", () => {
+  const src = readFileSync("src/render/render-docx.ts", "utf8");
+
+  const mastheadStart = src.indexOf("function buildMasthead");
+  assert.ok(mastheadStart >= 0, "buildMasthead function must exist");
+  const mastheadBody = src.slice(mastheadStart, src.indexOf("\nfunction ", mastheadStart + 1));
+  assert.ok(!mastheadBody.includes("new Table("), "buildMasthead must not instantiate a Table");
+
+  const metaStart = src.indexOf("function buildMetaStrip");
+  assert.ok(metaStart >= 0, "buildMetaStrip function must exist");
+  const metaBody = src.slice(metaStart, src.indexOf("\nfunction ", metaStart + 1));
+  assert.ok(!metaBody.includes("new Table("), "buildMetaStrip must not instantiate a Table");
+});
+
+test("Phase-B: body tables use DXA (fixed twip) column widths, not percentage", async () => {
+  const doc = makeTestDoc({
+    content: [
+      {
+        type: "table",
+        id: "t1",
+        rows: [
+          [[{ text: "Col A" }], [{ text: "Col B" }]],
+          [[{ text: "Val 1" }], [{ text: "Val 2" }]],
+        ],
+      },
+    ],
+  });
+  const buf = await renderDocumentDocx(doc, makeTestConfig());
+  const xml = await extractDocxXml(buf, "word/document.xml");
+  assert.ok(xml.includes('w:type="dxa"'), "Table cell widths must use DXA type");
+  assert.ok(!xml.includes('w:type="pct"'), "Table must not use percentage (pct) widths");
+});
+
+test("Phase-B: code block uses left-border accent style without paragraph shading", async () => {
+  const doc = makeTestDoc({
+    content: [{ type: "code", id: "c1", richText: [{ text: "const x = 1;" }], language: "typescript" }],
+  });
+  const buf = await renderDocumentDocx(doc, makeTestConfig());
+  const xml = await extractDocxXml(buf, "word/document.xml");
+  assert.ok(!xml.includes('w:fill="f0f0f0"'), "Code block must not use f0f0f0 paragraph shading fill");
+  assert.ok(!xml.includes('w:fill="000000"'), "Code block must not use black paragraph shading fill");
+  assert.ok(xml.includes("<w:left ") || xml.includes("<w:left>"), "Code block must have a left border");
+});
+
+test("Phase-B: callout block has no paragraph shading (ShadingType.SOLID)", async () => {
+  const doc = makeTestDoc({
+    content: [{ type: "callout", id: "ca1", richText: [{ text: "Important note." }] }],
+  });
+  const buf = await renderDocumentDocx(doc, makeTestConfig());
+  const xml = await extractDocxXml(buf, "word/document.xml");
+  assert.ok(!xml.includes('w:fill="f5f5f5"'), "Callout must not use f5f5f5 paragraph shading — incompatible with Apple Pages");
+});
+
+test("Phase-B: H1 heading has a bottom border in document XML", async () => {
+  const doc = makeTestDoc({
+    content: [{ type: "heading_1", id: "h1", richText: [{ text: "Chapter One" }] }],
+  });
+  const buf = await renderDocumentDocx(doc, makeTestConfig());
+  const xml = await extractDocxXml(buf, "word/document.xml");
+  assert.ok(xml.includes("<w:bottom ") || xml.includes("<w:bottom>"), "H1 paragraph must declare a bottom border");
 });

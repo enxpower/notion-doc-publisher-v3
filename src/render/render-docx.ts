@@ -15,49 +15,61 @@ import {
   PageNumber,
   Paragraph,
   ShadingType,
+  Tab,
   Table,
   TableCell,
   TableRow,
+  TabStopType,
   TextRun,
   UnderlineType,
-  VerticalAlign,
   WidthType,
 } from "docx";
 import type { AppConfig, BrandProfile } from "../config.js";
 import type { DocumentAsset, DocumentBlock, DocumentModel, RichTextSpan } from "../model/document.js";
 
 // ── Page layout (US Letter) ──────────────────────────────────────────────────
-const TWIP = 1440;                            // twips per inch
-const PAGE_W = Math.round(TWIP * 8.5);       // 12240 twips
-const PAGE_H = TWIP * 11;                    // 15840 twips
-const MARGIN_T = TWIP;                       // 1"
-const MARGIN_B = TWIP;                       // 1"
-const MARGIN_L = Math.round(TWIP * 1.25);   // 1800 twips (1.25")
-const MARGIN_R = TWIP;                       // 1"
-const HDR_DIST = Math.round(TWIP * 0.4);    // 576 twips (0.4") header distance
-const FTR_DIST = Math.round(TWIP * 0.4);    // 576 twips
+const TWIP = 1440;                           // twips per inch
+const PAGE_W = Math.round(TWIP * 8.5);      // 12240 twips
+const PAGE_H = TWIP * 11;                   // 15840 twips
+const MARGIN_T = TWIP;                      // 1"
+const MARGIN_B = TWIP;                      // 1"
+const MARGIN_L = Math.round(TWIP * 1.25);  // 1800 twips (1.25")
+const MARGIN_R = TWIP;                      // 1440 twips (1")
+const HDR_DIST = Math.round(TWIP * 0.4);   // 576 twips
+const FTR_DIST = Math.round(TWIP * 0.4);   // 576 twips
 
-// Content area width ≈ 9240 twips (6.375"). At 96 DPI: 9240/1440 * 96 ≈ 616 px
-const IMG_MAX_PX = Math.round(((PAGE_W - MARGIN_L - MARGIN_R) / TWIP) * 96);
+// Content area: 12240 - 1800 - 1440 = 9000 twips (6.25")
+const CONTENT_W = PAGE_W - MARGIN_L - MARGIN_R;
 
-// ── Fonts ────────────────────────────────────────────────────────────────────
-const FONT_SERIF = { ascii: "Georgia",     hAnsi: "Georgia",     cs: "Times New Roman", eastAsia: "Songti SC" };
-const FONT_SANS  = { ascii: "Arial",       hAnsi: "Arial",       cs: "Arial",           eastAsia: "PingFang SC" };
-const FONT_MONO  = { ascii: "Courier New", hAnsi: "Courier New", cs: "Courier New",     eastAsia: "Courier New" };
+// Image max width at 96 DPI: 9000/1440 * 96 = 600 px
+const IMG_MAX_PX = Math.round((CONTENT_W / TWIP) * 96);
+
+// ── Fonts (Phase A — cross-platform) ────────────────────────────────────────
+// Latin:  Times New Roman / Arial / Courier New  (metrically compatible via fonts-liberation on Ubuntu)
+// CJK:    Noto Serif/Sans/Mono CJK SC            (available via fonts-noto-cjk on Ubuntu)
+const FONT_SERIF = { ascii: "Times New Roman", hAnsi: "Times New Roman", cs: "Times New Roman", eastAsia: "Noto Serif CJK SC" };
+const FONT_SANS  = { ascii: "Arial",           hAnsi: "Arial",           cs: "Arial",           eastAsia: "Noto Sans CJK SC" };
+const FONT_MONO  = { ascii: "Courier New",     hAnsi: "Courier New",     cs: "Courier New",     eastAsia: "Noto Sans Mono CJK SC" };
 
 // ── Colours (hex, no #) ──────────────────────────────────────────────────────
-const C_TEXT     = "1a1c20";
-const C_MUTED    = "555555";
-const C_FAINT    = "999999";
-const C_LINE     = "c8c8c8";
-const C_CODE_BG  = "f0f0f0";
-const C_RULE     = "333333";
+const C_TEXT    = "1a1c20";
+const C_MUTED   = "555555";
+const C_FAINT   = "999999";
+const C_LINE    = "cccccc";
+const C_CODE_BG = "f0f0f0";
+const C_CODE    = "444444";
+const C_RULE    = "1a1c20";
 
 // ── Unit helpers ─────────────────────────────────────────────────────────────
-// Paragraph spacing/indent: twentieths of a point.  pt(6) = 120 = 6pt
-const pt = (n: number): number => n * 20;
-// TextRun size: half-points.  hpt(11) = 22 = 11pt
-const hpt = (n: number): number => n * 2;
+const pt  = (n: number): number => n * 20;   // spacing: twentieths of a point
+const hpt = (n: number): number => n * 2;    // font size: half-points
+
+// ── Line spacing presets ─────────────────────────────────────────────────────
+const LINE_BODY = { line: 276, lineRule: LineRuleType.AUTO }  as const;  // 1.15×
+const LINE_CODE = { line: 240, lineRule: LineRuleType.EXACT } as const;  // 1.0× exact
+
+// ── Metadata label column (tab stop position from content left) ──────────────
+const TAB_META_VALUE = 1980;  // ~1.375" from content left edge
 
 // ── Types ────────────────────────────────────────────────────────────────────
 type ParagraphChild = Paragraph | Table;
@@ -85,10 +97,10 @@ export async function renderDocumentDocx(document: DocumentModel, config: AppCon
           page: {
             size: { width: PAGE_W, height: PAGE_H },
             margin: {
-              top: MARGIN_T,
+              top:    MARGIN_T,
               bottom: MARGIN_B,
-              left: MARGIN_L,
-              right: MARGIN_R,
+              left:   MARGIN_L,
+              right:  MARGIN_R,
               header: HDR_DIST,
               footer: FTR_DIST,
             },
@@ -118,7 +130,7 @@ function buildNumberingConfig(numGroups: number) {
             text: "•",
             alignment: AlignmentType.LEFT,
             style: {
-              paragraph: { indent: { left: pt(24), hanging: pt(12) }, spacing: { after: pt(3) } },
+              paragraph: { indent: { left: pt(24), hanging: pt(12) }, spacing: { after: pt(3), ...LINE_BODY } },
               run: { font: FONT_SANS, size: hpt(11) },
             },
           },
@@ -133,7 +145,7 @@ function buildNumberingConfig(numGroups: number) {
             text: "%1.",
             alignment: AlignmentType.LEFT,
             style: {
-              paragraph: { indent: { left: pt(24), hanging: pt(12) }, spacing: { after: pt(3) } },
+              paragraph: { indent: { left: pt(24), hanging: pt(12) }, spacing: { after: pt(3), ...LINE_BODY } },
               run: { font: FONT_SANS, size: hpt(11) },
             },
           },
@@ -157,62 +169,21 @@ function countNumberedListGroups(blocks: DocumentBlock[]): number {
 }
 
 // ── Header & footer ──────────────────────────────────────────────────────────
+// Paragraph + right tab stop — no tables.
+// Tables in header/footer zones collapse in Apple Pages and some LibreOffice builds.
 
 function buildPageHeader(meta: DocumentModel["meta"], brand: { displayName: string }): Header {
-  const ref = [meta.docId, meta.version ?? ""].filter(Boolean).join(" · ");
-  const borderNone = { style: BorderStyle.NONE, size: 0, color: "FFFFFF" };
-
+  const ref = [meta.docId, meta.version ?? ""].filter(Boolean).join("  ·  ");
   return new Header({
     children: [
-      new Table({
-        width: { size: 100, type: WidthType.PERCENTAGE },
-        borders: {
-          top:              borderNone,
-          bottom:           { style: BorderStyle.SINGLE, size: 4, color: C_LINE },
-          left:             borderNone,
-          right:            borderNone,
-          insideHorizontal: borderNone,
-          insideVertical:   borderNone,
-        },
-        rows: [
-          new TableRow({
-            children: [
-              new TableCell({
-                width: { size: 60, type: WidthType.PERCENTAGE },
-                borders: noBorders(),
-                verticalAlign: VerticalAlign.CENTER,
-                children: [
-                  new Paragraph({
-                    spacing: { before: 0, after: pt(3) },
-                    children: [
-                      new TextRun({
-                        text: brand.displayName,
-                        font: FONT_SANS,
-                        size: hpt(7.5),
-                        bold: true,
-                        allCaps: true,
-                        color: C_TEXT,
-                      }),
-                    ],
-                  }),
-                ],
-              }),
-              new TableCell({
-                width: { size: 40, type: WidthType.PERCENTAGE },
-                borders: noBorders(),
-                verticalAlign: VerticalAlign.CENTER,
-                children: [
-                  new Paragraph({
-                    alignment: AlignmentType.RIGHT,
-                    spacing: { before: 0, after: pt(3) },
-                    children: [
-                      new TextRun({ text: ref, font: FONT_SANS, size: hpt(7), color: C_MUTED }),
-                    ],
-                  }),
-                ],
-              }),
-            ],
-          }),
+      new Paragraph({
+        tabStops: [{ type: TabStopType.RIGHT, position: CONTENT_W }],
+        border: { bottom: { style: BorderStyle.SINGLE, size: 4, color: C_LINE } },
+        spacing: { before: 0, after: pt(3) },
+        children: [
+          new TextRun({ text: brand.displayName, font: FONT_SANS, size: hpt(7.5), bold: true, allCaps: true, color: C_TEXT }),
+          new TextRun({ children: [new Tab()] }),
+          new TextRun({ text: ref, font: FONT_SANS, size: hpt(7), color: C_MUTED }),
         ],
       }),
     ],
@@ -242,7 +213,7 @@ function buildPageFooter(): Footer {
 function buildCoverZone(meta: DocumentModel["meta"], brand: { displayName: string; tagline: string }): ParagraphChild[] {
   const result: ParagraphChild[] = [];
 
-  // 1. Masthead table: brand name (left) + tagline (right), thick bottom rule
+  // 1. Masthead: brand name (left) + tagline (right via tab stop), thick bottom rule
   result.push(buildMasthead(brand));
 
   // 2. Type kicker
@@ -271,7 +242,7 @@ function buildCoverZone(meta: DocumentModel["meta"], brand: { displayName: strin
         new TextRun({
           text: meta.title,
           font: FONT_SANS,
-          size: hpt(22),
+          size: hpt(20),
           bold: true,
           color: C_TEXT,
         }),
@@ -282,11 +253,8 @@ function buildCoverZone(meta: DocumentModel["meta"], brand: { displayName: strin
   // 4. Identity line: DOC_ID · Type · Version · Status (with top rule)
   result.push(buildIdentityLine(meta));
 
-  // 5. Metadata strip table (client, project)
-  const metaTable = buildMetaStrip(meta);
-  if (metaTable) {
-    result.push(metaTable);
-  }
+  // 5. Metadata strip: CLIENT, PROJECT as tab-aligned label/value paragraphs
+  result.push(...buildMetaStrip(meta));
 
   // 6. Rule before body
   result.push(
@@ -300,66 +268,19 @@ function buildCoverZone(meta: DocumentModel["meta"], brand: { displayName: strin
   return result;
 }
 
-function buildMasthead(brand: { displayName: string; tagline: string }): Table {
-  const borderNone = { style: BorderStyle.NONE, size: 0, color: "FFFFFF" };
-  return new Table({
-    width: { size: 100, type: WidthType.PERCENTAGE },
-    borders: {
-      top:              borderNone,
-      bottom:           { style: BorderStyle.SINGLE, size: 16, color: C_RULE },
-      left:             borderNone,
-      right:            borderNone,
-      insideHorizontal: borderNone,
-      insideVertical:   borderNone,
-    },
-    rows: [
-      new TableRow({
-        children: [
-          new TableCell({
-            width: { size: 65, type: WidthType.PERCENTAGE },
-            borders: noBorders(),
-            verticalAlign: VerticalAlign.BOTTOM,
-            children: [
-              new Paragraph({
-                spacing: { before: 0, after: pt(5) },
-                children: [
-                  new TextRun({
-                    text: brand.displayName,
-                    font: FONT_SANS,
-                    size: hpt(11),
-                    bold: true,
-                    allCaps: true,
-                    color: C_TEXT,
-                  }),
-                ],
-              }),
-            ],
-          }),
-          new TableCell({
-            width: { size: 35, type: WidthType.PERCENTAGE },
-            borders: noBorders(),
-            verticalAlign: VerticalAlign.BOTTOM,
-            children: [
-              new Paragraph({
-                alignment: AlignmentType.RIGHT,
-                spacing: { before: 0, after: pt(5) },
-                children: brand.tagline
-                  ? [
-                      new TextRun({
-                        text: brand.tagline,
-                        font: FONT_SANS,
-                        size: hpt(7),
-                        bold: true,
-                        allCaps: true,
-                        color: C_MUTED,
-                      }),
-                    ]
-                  : [],
-              }),
-            ],
-          }),
-        ],
-      }),
+function buildMasthead(brand: { displayName: string; tagline: string }): Paragraph {
+  return new Paragraph({
+    tabStops: brand.tagline ? [{ type: TabStopType.RIGHT, position: CONTENT_W }] : [],
+    border: { bottom: { style: BorderStyle.SINGLE, size: 16, color: C_RULE } },
+    spacing: { before: 0, after: pt(5) },
+    children: [
+      new TextRun({ text: brand.displayName, font: FONT_SANS, size: hpt(11), bold: true, allCaps: true, color: C_TEXT }),
+      ...(brand.tagline
+        ? [
+            new TextRun({ children: [new Tab()] }),
+            new TextRun({ text: brand.tagline, font: FONT_SANS, size: hpt(7), bold: true, allCaps: true, color: C_MUTED }),
+          ]
+        : []),
     ],
   });
 }
@@ -393,61 +314,28 @@ function buildIdentityLine(meta: DocumentModel["meta"]): Paragraph {
   });
 }
 
-function buildMetaStrip(meta: DocumentModel["meta"]): Table | null {
+function buildMetaStrip(meta: DocumentModel["meta"]): Paragraph[] {
   const fields: Array<[string, string]> = (
     [
-      ["Client", meta.client.label],
-      ["Project", meta.project.label],
-      ["Status", meta.status],
+      ["CLIENT",  meta.client.label],
+      ["PROJECT", meta.project.label],
     ] as Array<[string, string]>
   ).filter(([, v]) => Boolean(v));
 
-  if (fields.length === 0) return null;
+  if (fields.length === 0) return [];
 
-  const colWidth = Math.floor(100 / fields.length);
-
-  return new Table({
-    width: { size: 100, type: WidthType.PERCENTAGE },
-    borders: {
-      top:              { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
-      bottom:           { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
-      left:             { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
-      right:            { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
-      insideHorizontal: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
-      insideVertical:   { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
-    },
-    rows: [
-      new TableRow({
-        children: fields.map(
-          ([label, value]) =>
-            new TableCell({
-              width: { size: colWidth, type: WidthType.PERCENTAGE },
-              borders: noBorders(),
-              children: [
-                new Paragraph({
-                  spacing: { before: 0, after: pt(1) },
-                  children: [
-                    new TextRun({
-                      text: label.toUpperCase(),
-                      font: FONT_SANS,
-                      size: hpt(7),
-                      bold: true,
-                      color: C_MUTED,
-                    }),
-                  ],
-                }),
-                new Paragraph({
-                  spacing: { before: 0, after: 0 },
-                  children: [
-                    new TextRun({ text: value, font: FONT_SANS, size: hpt(10), color: C_TEXT }),
-                  ],
-                }),
-              ],
-            })
-        ),
-      }),
-    ],
-  });
+  return fields.map(
+    ([label, value]) =>
+      new Paragraph({
+        tabStops: [{ type: TabStopType.LEFT, position: TAB_META_VALUE }],
+        spacing: { before: 0, after: pt(2) },
+        children: [
+          new TextRun({ text: label, font: FONT_SANS, size: hpt(7.5), bold: true, allCaps: true, color: C_MUTED }),
+          new TextRun({ children: [new Tab()] }),
+          new TextRun({ text: value, font: FONT_SANS, size: hpt(9), color: C_TEXT }),
+        ],
+      })
+  );
 }
 
 // ── Body blocks ──────────────────────────────────────────────────────────────
@@ -483,7 +371,7 @@ async function renderBlock(
     case "paragraph":
       return [
         new Paragraph({
-          spacing: { before: 0, after: pt(6) },
+          spacing: { before: 0, after: pt(6), ...LINE_BODY },
           children: renderDocxRichText(block.richText),
           run: { font: FONT_SERIF, size: hpt(11), color: C_TEXT },
         }),
@@ -494,9 +382,10 @@ async function renderBlock(
         new Paragraph({
           heading: HeadingLevel.HEADING_1,
           keepNext: true,
-          spacing: { before: pt(14), after: pt(4) },
+          border: { bottom: { style: BorderStyle.SINGLE, size: 4, color: C_LINE } },
+          spacing: { before: pt(18), after: pt(6), ...LINE_BODY },
           children: renderDocxRichText(block.richText),
-          run: { font: FONT_SANS, size: hpt(16), bold: true, color: C_TEXT },
+          run: { font: FONT_SANS, size: hpt(15), bold: true, color: C_TEXT },
         }),
       ];
 
@@ -537,7 +426,7 @@ async function renderBlock(
       return [
         new Paragraph({
           numbering: { reference: "bullet-list", level: 0 },
-          spacing: { before: 0, after: pt(3) },
+          spacing: { before: 0, after: pt(3), ...LINE_BODY },
           children: renderDocxRichText(block.richText),
           run: { font: FONT_SERIF, size: hpt(11), color: C_TEXT },
         }),
@@ -552,7 +441,7 @@ async function renderBlock(
       return [
         new Paragraph({
           numbering: { reference: ref, level: 0 },
-          spacing: { before: 0, after: pt(3) },
+          spacing: { before: 0, after: pt(3), ...LINE_BODY },
           children: renderDocxRichText(block.richText),
           run: { font: FONT_SERIF, size: hpt(11), color: C_TEXT },
         }),
@@ -564,7 +453,7 @@ async function renderBlock(
         new Paragraph({
           indent: { left: pt(18), right: pt(6) },
           border: { left: { style: BorderStyle.SINGLE, size: 16, color: C_MUTED } },
-          spacing: { before: pt(6), after: pt(6) },
+          spacing: { before: pt(6), after: pt(6), ...LINE_BODY },
           children: renderDocxRichText(block.richText),
           run: { font: FONT_SERIF, size: hpt(11), color: C_MUTED, italics: true },
         }),
@@ -580,8 +469,7 @@ async function renderBlock(
             left:   { style: BorderStyle.SINGLE, size: 4, color: C_LINE },
             right:  { style: BorderStyle.SINGLE, size: 4, color: C_LINE },
           },
-          shading: { type: ShadingType.SOLID, fill: "f5f5f5", color: "auto" },
-          spacing: { before: pt(6), after: pt(6) },
+          spacing: { before: pt(6), after: pt(6), ...LINE_BODY },
           children: renderDocxRichText(block.richText),
           run: { font: FONT_SANS, size: hpt(10.5), color: C_TEXT },
         }),
@@ -596,25 +484,14 @@ async function renderBlock(
           codeRuns.push(new TextRun({ break: 1, font: FONT_MONO, size: hpt(9) }));
         }
         codeRuns.push(
-          new TextRun({ text: lines[i] ?? "", font: FONT_MONO, size: hpt(9), color: C_TEXT })
+          new TextRun({ text: lines[i] ?? "", font: FONT_MONO, size: hpt(9), color: C_CODE })
         );
       }
       return [
         new Paragraph({
-          indent: { left: pt(12), right: pt(12) },
-          border: {
-            top:    { style: BorderStyle.SINGLE, size: 4, color: C_LINE },
-            bottom: { style: BorderStyle.SINGLE, size: 4, color: C_LINE },
-            left:   { style: BorderStyle.SINGLE, size: 4, color: C_LINE },
-            right:  { style: BorderStyle.SINGLE, size: 4, color: C_LINE },
-          },
-          shading: { type: ShadingType.SOLID, fill: C_CODE_BG, color: "auto" },
-          spacing: {
-            before: pt(6),
-            after: pt(6),
-            line: 260,
-            lineRule: LineRuleType.AUTO,
-          },
+          indent: { left: pt(18) },
+          border: { left: { style: BorderStyle.SINGLE, size: 24, color: C_FAINT } },
+          spacing: { before: pt(6), after: pt(6), ...LINE_CODE },
           children: codeRuns,
         }),
       ];
@@ -701,7 +578,6 @@ async function renderImageBlock(asset: DocumentAsset, docId: string): Promise<Pa
   const ext = path.extname(filename).toLowerCase().slice(1);
   const imgType = resolveImageType(ext);
   if (!imgType) {
-    // unsupported format — fall back to alt text or URL
     const label = asset.alt || filename;
     return new Paragraph({
       spacing: { before: pt(6), after: pt(6) },
@@ -717,38 +593,10 @@ async function renderImageBlock(asset: DocumentAsset, docId: string): Promise<Pa
   }
 
   const { width, height } = readImageDimensions(data, ext);
-  const children: (TextRun | ImageRun | ExternalHyperlink)[] = [
-    new ImageRun({ data, transformation: { width, height }, type: imgType }),
-  ];
   const caption = asset.caption && asset.caption.length > 0 ? asset.caption : null;
 
-  const paras: Paragraph[] = [
-    new Paragraph({
-      alignment: AlignmentType.LEFT,
-      spacing: { before: pt(8), after: caption ? pt(2) : pt(8) },
-      children,
-    }),
-  ];
-
   if (caption) {
-    paras.push(
-      new Paragraph({
-        spacing: { before: 0, after: pt(8) },
-        children: [
-          new TextRun({
-            text: caption.map((s) => s.text).join(""),
-            font: FONT_SANS,
-            size: hpt(8.5),
-            italics: true,
-            color: C_MUTED,
-          }),
-        ],
-      })
-    );
-    // Return only the image paragraph; caption is appended separately via array.
-    // Since we return a single Paragraph from renderImageBlock, we can't return both.
-    // Instead, we render caption into the image paragraph itself via a break.
-    paras[0] = new Paragraph({
+    return new Paragraph({
       alignment: AlignmentType.LEFT,
       spacing: { before: pt(8), after: pt(8) },
       children: [
@@ -763,10 +611,13 @@ async function renderImageBlock(asset: DocumentAsset, docId: string): Promise<Pa
         }),
       ],
     });
-    return paras[0];
   }
 
-  return paras[0];
+  return new Paragraph({
+    alignment: AlignmentType.LEFT,
+    spacing: { before: pt(8), after: pt(8) },
+    children: [new ImageRun({ data, transformation: { width, height }, type: imgType })],
+  });
 }
 
 function renderFileBlock(asset: DocumentAsset): Paragraph {
@@ -844,20 +695,20 @@ function scaleToMax(width: number, height: number): { width: number; height: num
   return { width: IMG_MAX_PX, height: Math.round(height * scale) };
 }
 
-// ── Table rendering ──────────────────────────────────────────────────────────
+// ── Table rendering (Phase B — DXA fixed-width columns) ──────────────────────
 
 function renderTableBlock(rows: RichTextSpan[][][]): Table {
   const colCount = rows.reduce((max, row) => Math.max(max, row.length), 0) || 1;
-  const colWidth = Math.floor(100 / colCount);
+  const colW = Math.floor(CONTENT_W / colCount);  // DXA twips, not percentage
   const thinBorder = { style: BorderStyle.SINGLE, size: 4, color: C_LINE };
 
   return new Table({
-    width: { size: 100, type: WidthType.PERCENTAGE },
+    width: { size: CONTENT_W, type: WidthType.DXA },
     borders: {
-      top:     thinBorder,
-      bottom:  thinBorder,
-      left:    thinBorder,
-      right:   thinBorder,
+      top:              thinBorder,
+      bottom:           thinBorder,
+      left:             thinBorder,
+      right:            thinBorder,
       insideHorizontal: thinBorder,
       insideVertical:   thinBorder,
     },
@@ -867,7 +718,7 @@ function renderTableBlock(rows: RichTextSpan[][][]): Table {
         children: row.map(
           (cell) =>
             new TableCell({
-              width: { size: colWidth, type: WidthType.PERCENTAGE },
+              width: { size: colW, type: WidthType.DXA },
               borders: {
                 top:    thinBorder,
                 bottom: thinBorder,
@@ -897,11 +748,6 @@ function renderTableBlock(rows: RichTextSpan[][][]): Table {
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
-
-function noBorders() {
-  const none = { style: BorderStyle.NONE, size: 0, color: "FFFFFF" };
-  return { top: none, bottom: none, left: none, right: none };
-}
 
 type BrandPresentation = { displayName: string; tagline: string };
 
