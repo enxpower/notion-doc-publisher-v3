@@ -352,7 +352,7 @@ dd {
   justify-content: flex-end;
   align-items: center;
   gap: 8px;
-  width: 100%;
+  max-width: var(--document-measure);
   clear: both;
   margin-top: 14px;
 }
