@@ -186,10 +186,93 @@ document. Per-document results are written back to Notion as `success`,
 `skipped` (with a concrete reason such as `Skipped: Status "Draft" is not
 configured for publishing.`), or `failed`.
 
+## Sidecar PDF Export (pdf:doc)
+
+`npm run pdf:doc` is a **sidecar-only** command. It is completely separate from
+the existing HTML publishing pipeline.
+
+### Safety boundaries
+
+| Boundary | Guarantee |
+| --- | --- |
+| Notion access | None — reads only local `dist/` files |
+| HTML output | Does not modify `dist/docs/{DOC_ID}/` |
+| GitHub Actions | Does not modify `.github/workflows/preview-publish.yml` |
+| DOC_ID logic | Does not change assignment or validation |
+| Deployment | Does not deploy anything |
+
+### What it does
+
+Reads `dist/reports/build-report.json` (produced by a prior `npm run build`),
+re-renders each published document using `templates/pdf-document.html` and
+`styles/pdf-document.css`, and writes `dist/pdf/{DOC_ID}.pdf`.
+
+### Prerequisites
+
+```sh
+# 1. Build first (requires NOTION_TOKEN)
+npm run build
+
+# 2. Install Playwright Chromium (once)
+npx playwright install chromium
+```
+
+### Usage
+
+```sh
+# Export all published documents
+npm run pdf:doc
+
+# Export a single document by DOC_ID
+npm run pdf:doc -- ARCBOS-CON-2606-0001
+```
+
+### Output
+
+```
+dist/
+  pdf/
+    ARCBOS-CON-2606-0001.pdf
+    ARCBOS-CON-2606-0002.pdf
+    ...
+```
+
+### Failure messages
+
+| Situation | Message |
+| --- | --- |
+| `dist/reports/build-report.json` missing | `PDF export: dist/reports/build-report.json not found. Run "npm run build" first.` |
+| Playwright not installed | `PDF export failed: playwright is not installed.` |
+| No documents in build report | `PDF export: no documents in build-report.json.` |
+| No publishable documents | `PDF export: no publishable documents with DOC_IDs in build-report.json.` |
+| Single DOC_ID not found | `PDF export: document "X" not found in build-report.json.` |
+| Built HTML missing for a document | `[SKIP] DOC_ID: built HTML not found at dist/...` |
+
+### Filtering by DOC_ID
+
+Single-document filtering is supported:
+
+```sh
+npm run pdf:doc -- ARCBOS-CON-2606-0001
+```
+
+If the DOC_ID is not found in the build report, the command exits with an
+error and lists the available DOC_IDs.
+
+### Limitations
+
+- Requires a prior `npm run build` (reads from `dist/`).
+- Image paths in body content must be resolvable from the built `dist/` tree.
+- Page numbers via Playwright `displayHeaderFooter` require Chromium.
+- This is a local-only developer tool. Output PDFs are not deployed anywhere.
+
 ## Boundaries
 
 v0.2.0 adds preview/test deployment only. It does not add PDF automation,
 approval workflow, production deployment, or writes to production repositories.
+
+The `pdf:doc` command in `feature/sidecar-pdf-doc-export` is a sidecar
+experiment only and is pending owner review before merge.
 
 ## AI / Governance Operating Rules
 
