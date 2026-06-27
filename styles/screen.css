@@ -228,8 +228,6 @@ h1:lang(zh) {
   justify-content: space-between;
   gap: 8px 20px;
   margin-top: 18px;
-  padding-top: 14px;
-  border-top: 1px solid var(--line);
 }
 
 .identity-facts {
@@ -306,7 +304,6 @@ h1:lang(zh) {
 .document-summary {
   margin-top: 14px;
   padding-bottom: 16px;
-  border-bottom: 1px solid var(--line);
 }
 
 .document-meta {
@@ -352,8 +349,6 @@ dd {
   justify-content: flex-end;
   align-items: center;
   gap: 8px;
-  max-width: var(--document-measure);
-  clear: both;
   margin-top: 14px;
 }
 
@@ -389,14 +384,12 @@ dd {
 }
 
 /* ---- table of contents ------------------------------------
-   A light navigation aid, not a callout box: hairline top rule,
-   no fill, restrained type. Two columns when there is room so long
-   agreements stay compact and readable. */
+   A light navigation aid, not a callout box: no fill, restrained
+   type. Two columns when there is room so long agreements stay
+   compact and readable. */
 .document-toc {
   margin: 30px 0;
   padding-top: 16px;
-  border-top: 1px solid var(--line);
-  max-width: var(--document-measure);
 }
 
 .toc-details summary {
@@ -486,24 +479,13 @@ dd {
 }
 
 /* ============================================================
-   Document body — constrained reading measure
+   Document body
    ============================================================ */
 .document-content {
   padding-top: 26px;
   font-size: 16.5px;
   overflow-wrap: break-word; /* Prevent long URLs / unbreakable strings from
                                 forcing body-level horizontal scroll */
-}
-
-.document-content > * {
-  max-width: var(--document-measure);
-}
-
-.document-content > .table-wrap,
-.document-content > figure,
-.document-content > pre,
-.document-content > hr {
-  max-width: 100%;
 }
 
 p,
