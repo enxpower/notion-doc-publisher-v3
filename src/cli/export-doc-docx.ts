@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { copyDocumentAssets } from "../assets/copy-assets.js";
-import { loadConfigOrThrow, runCli } from "../config.js";
+import { UserFacingError, loadConfigOrThrow, runCli } from "../config.js";
 import {
   loadDocuments,
   publishableDocuments,
@@ -26,7 +26,16 @@ await runCli(async () => {
     }
   }
 
-  const published = publishableDocuments(documents, config);
+  // Optional DOC_ID filter: npm run docx:doc -- ARCBOS-CON-2606-0001
+  const filter = process.argv[2]?.trim().toUpperCase() || null;
+
+  const published = publishableDocuments(documents, config)
+    .filter((d) => !filter || d.meta.docId?.toUpperCase() === filter);
+
+  if (filter && published.length === 0) {
+    throw new UserFacingError(`No publishable document found with DOC_ID "${filter}".`);
+  }
+
   await fs.mkdir("dist/docx", { recursive: true });
 
   let count = 0;
