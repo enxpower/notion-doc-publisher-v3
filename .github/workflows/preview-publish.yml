@@ -100,6 +100,16 @@ jobs:
       - name: Install
         run: npm ci
 
+      - name: Install Typst
+        uses: typst-community/setup-typst@v4
+
+      - name: Install CJK and Latin fonts
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y fonts-noto-cjk fonts-noto-cjk-extra fonts-liberation
+          sudo fc-cache -fv
+
       - name: Regression tests (no Notion access)
         run: npm test
 
@@ -115,6 +125,14 @@ jobs:
         id: build
         continue-on-error: true
         run: npm run build
+
+      - name: Generate site PDFs
+        id: pdf-site
+        if: steps.build.outcome == 'success'
+        continue-on-error: ${{ vars.PDF_REQUIRED != 'true' }}
+        env:
+          PDF_REQUIRED: ${{ vars.PDF_REQUIRED || 'false' }}
+        run: npm run pdf:site
 
       - name: Configure GitHub Pages
         if: steps.preview.outputs.enabled == 'true' && steps.build.outcome == 'success'

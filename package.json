@@ -19,7 +19,8 @@
     "lint:security": "tsc && node .tmp/cli/security-lint.js",
     "pdf": "tsc && node .tmp/cli/export-pdf.js",
     "pdf:export": "tsx src/cli/export-typst.ts",
-    "pdf:queue": "tsx src/cli/pdf-queue.ts"
+    "pdf:queue": "tsx src/cli/pdf-queue.ts",
+    "pdf:site": "tsx src/cli/export-site-pdf.ts"
   },
   "devDependencies": {
     "@types/node": "^20.12.12",

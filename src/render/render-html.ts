@@ -53,7 +53,7 @@ export async function renderDocumentHtml(document: DocumentModel, config: AppCon
     topbar: renderTopbar(brand.displayName, ROOT_RELATIVE_FROM_DOC, !isPrivateLink),
     identity: renderIdentity(meta.docId, meta.documentType.label, meta.version, meta.status, classification),
     metaStrip: renderMetaStrip(meta.client.label, meta.project.label, updated),
-    actions: renderActions(),
+    actions: renderActions(meta.docId),
     toc: renderToc(toc),
     body,
     footer: renderFooter(brand.displayName, meta.docId, meta.version),
@@ -352,13 +352,16 @@ function renderMetaStrip(client: string, project: string, updated: string): stri
 }
 
 /**
- * Compact, secondary print action. It opens the browser's native print dialog
- * (the only print path in this build). The customer-facing label is simply
- * "Print"; any explanation lives in the title/aria-label, never in visible body
- * UI.
+ * Compact, secondary print/download actions.
+ * Print opens the browser's native print dialog.
+ * Download PDF links to the pre-generated site PDF at /pdf/{DOC_ID}.pdf.
+ * Exported for unit testing.
  */
-function renderActions(): string {
-  return `<button type="button" class="action-btn" onclick="window.print()" title="Print this document using your browser" aria-label="Print this document">Print</button>`;
+export function renderActions(docId?: string | null): string {
+  const printBtn = `<button type="button" class="action-btn" onclick="window.print()" title="Print this document using your browser" aria-label="Print this document">Print</button>`;
+  if (!docId) return printBtn;
+  const pdfBtn = `<a href="/pdf/${escapeHtml(docId)}.pdf" class="action-btn action-btn--download-pdf" title="Download pre-generated PDF" aria-label="Download PDF" download>Download PDF</a>`;
+  return `${printBtn}${pdfBtn}`;
 }
 
 function renderToc(entries: TocEntry[]): string {
