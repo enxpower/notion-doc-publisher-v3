@@ -1,0 +1,113 @@
+name: DOCX/PDF Export QA
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "Branch to check out and run the export from."
+        required: true
+        default: "feature/sidecar-docx-pdf-export"
+      doc_id:
+        description: "DOC_ID to export (e.g. ARCBOS-AGR-2606-0008). Leave empty to export all publishable documents."
+        required: false
+        default: ""
+
+# Read-only: no deploy, no pages, no id-token write
+permissions:
+  contents: read
+
+jobs:
+  docx-pdf-qa:
+    runs-on: ubuntu-latest
+
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      # Required secret:
+      # - NOTION_TOKEN
+      # Required variables or secrets:
+      # - NOTION_DATABASE_ID
+      # - ALLOWED_VISIBILITY
+      # - PUBLISHABLE_STATUSES
+      # - BRAND_TOKENS_JSON
+      # - DOCUMENT_TYPE_TOKENS_JSON
+      NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+      NOTION_DATABASE_ID: ${{ vars.NOTION_DATABASE_ID || secrets.NOTION_DATABASE_ID }}
+      ALLOWED_VISIBILITY: ${{ vars.ALLOWED_VISIBILITY || secrets.ALLOWED_VISIBILITY }}
+      PUBLISHABLE_STATUSES: ${{ vars.PUBLISHABLE_STATUSES || secrets.PUBLISHABLE_STATUSES }}
+      BRAND_TOKENS_JSON: ${{ vars.BRAND_TOKENS_JSON || secrets.BRAND_TOKENS_JSON }}
+      DOCUMENT_TYPE_TOKENS_JSON: ${{ vars.DOCUMENT_TYPE_TOKENS_JSON || secrets.DOCUMENT_TYPE_TOKENS_JSON }}
+      TARGET_SITE_DOMAIN: ${{ vars.TARGET_SITE_DOMAIN || secrets.TARGET_SITE_DOMAIN || '' }}
+      DOC_ID_YEAR_MONTH: ${{ vars.DOC_ID_YEAR_MONTH || secrets.DOC_ID_YEAR_MONTH || '' }}
+      # Safety: never deploy, never publish publicly, never write back to Notion
+      PREVIEW_DEPLOY_ENABLED: "false"
+      DOCUMENT_REGISTER_PUBLIC: "false"
+
+    steps:
+      - name: Checkout ${{ github.event.inputs.branch }}
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.branch }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Install LibreOffice
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y libreoffice
+
+      - name: Type check
+        run: npm run check
+
+      - name: Tests
+        run: npm test
+
+      - name: Security lint
+        run: npm run lint:security
+
+      - name: Generate DOCX
+        env:
+          DOC_ID_INPUT: ${{ github.event.inputs.doc_id }}
+        run: |
+          if [ -n "$DOC_ID_INPUT" ]; then
+            npm run docx:doc -- "$DOC_ID_INPUT"
+          else
+            npm run docx:doc
+          fi
+
+      - name: Generate PDF from DOCX
+        env:
+          DOC_ID_INPUT: ${{ github.event.inputs.doc_id }}
+        run: |
+          if [ -n "$DOC_ID_INPUT" ]; then
+            npm run pdf:from-docx -- "$DOC_ID_INPUT"
+          else
+            npm run pdf:from-docx
+          fi
+
+      - name: Upload DOCX artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: docx-export
+          path: dist/docx
+          if-no-files-found: warn
+
+      - name: Upload PDF artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: pdf-export
+          path: dist/pdf
+          if-no-files-found: warn
+
+      - name: Upload export reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: export-reports
+          path: dist/reports
+          if-no-files-found: ignore
