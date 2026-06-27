@@ -255,3 +255,114 @@ test(".document-toc CSS must NOT use max-width: var(--document-measure)", async 
     ".document-toc must NOT declare max-width: var(--document-measure) — TOC must align with the full paper content width, same as masthead/title"
   );
 });
+
+// ── 20. renderMetaGrid exists in render-html.ts ───────────────────────────────
+
+test("render-html.ts contains renderMetaGrid function emitting meta-item cells", async () => {
+  const src = await fs.readFile(path.resolve("src/render/render-html.ts"), "utf8");
+  assert.ok(
+    src.includes("renderMetaGrid"),
+    "render-html.ts must define renderMetaGrid()"
+  );
+  assert.ok(
+    src.includes("meta-item"),
+    "renderMetaGrid must emit .meta-item cell elements"
+  );
+});
+
+// ── 21. metaGrid template slot is used, not old identity/metaStrip ───────────
+
+test("render-html.ts uses metaGrid template slot and not identity or metaStrip", async () => {
+  const src = await fs.readFile(path.resolve("src/render/render-html.ts"), "utf8");
+  assert.ok(src.includes("metaGrid:"), "fillTemplate must include metaGrid key");
+  assert.ok(!src.includes("metaStrip:"), "fillTemplate must NOT include metaStrip key");
+  assert.ok(!src.includes("identity:"), "fillTemplate must NOT include identity key");
+});
+
+// ── 22. enterprise.html template has {{metaGrid}} and no {{identity}}/{{metaStrip}} ──
+
+test("enterprise.html has {{metaGrid}} slot and no legacy {{identity}} or {{metaStrip}}", async () => {
+  const src = await fs.readFile(path.resolve("templates/enterprise.html"), "utf8");
+  assert.ok(src.includes("{{metaGrid}}"), "enterprise.html must contain {{metaGrid}} slot");
+  assert.ok(!src.includes("{{identity}}"), "enterprise.html must not contain {{identity}} slot");
+  assert.ok(!src.includes("{{metaStrip}}"), "enterprise.html must not contain {{metaStrip}} slot");
+});
+
+// ── 23. .document-meta-grid CSS uses 4-column grid ───────────────────────────
+
+test(".document-meta-grid CSS uses 4-column grid layout", async () => {
+  const src = await fs.readFile(path.resolve("styles/screen.css"), "utf8");
+  const ruleStart = src.indexOf(".document-meta-grid {");
+  const ruleEnd = src.indexOf("}", ruleStart);
+  assert.ok(ruleStart >= 0, ".document-meta-grid rule must exist in screen.css");
+  const rule = src.slice(ruleStart, ruleEnd + 1);
+  assert.ok(rule.includes("display: grid"), ".document-meta-grid must use display: grid");
+  assert.ok(
+    rule.includes("repeat(4,"),
+    ".document-meta-grid must declare repeat(4, ...) for 4-column layout"
+  );
+});
+
+// ── 24. .document-meta-grid has no max-width: var(--document-measure) ────────
+
+test(".document-meta-grid CSS must NOT use max-width: var(--document-measure)", async () => {
+  const src = await fs.readFile(path.resolve("styles/screen.css"), "utf8");
+  const ruleStart = src.indexOf(".document-meta-grid {");
+  const ruleEnd = src.indexOf("}", ruleStart);
+  assert.ok(ruleStart >= 0, ".document-meta-grid rule must exist in screen.css");
+  const rule = src.slice(ruleStart, ruleEnd + 1);
+  assert.ok(
+    !rule.includes("max-width: var(--document-measure)"),
+    ".document-meta-grid must NOT use max-width: var(--document-measure)"
+  );
+});
+
+// ── 25. Old .document-identity and .document-summary are gone ────────────────
+
+test("screen.css does not contain .document-identity or .document-summary rules", async () => {
+  const src = await fs.readFile(path.resolve("styles/screen.css"), "utf8");
+  assert.ok(
+    !src.includes(".document-identity {"),
+    "screen.css must not contain .document-identity rule — replaced by .document-meta-grid"
+  );
+  assert.ok(
+    !src.includes(".document-summary {"),
+    "screen.css must not contain .document-summary rule — replaced by .document-meta-grid"
+  );
+});
+
+// ── 26. .action-btn CSS uses min-height 36px and padding 0 18px ──────────────
+
+test(".action-btn CSS uses min-height: 36px and padding: 0 18px", async () => {
+  const src = await fs.readFile(path.resolve("styles/screen.css"), "utf8");
+  const ruleStart = src.indexOf(".action-btn {");
+  const ruleEnd = src.indexOf("}", ruleStart);
+  assert.ok(ruleStart >= 0, ".action-btn rule must exist in screen.css");
+  const rule = src.slice(ruleStart, ruleEnd + 1);
+  assert.ok(rule.includes("min-height: 36px"), ".action-btn must declare min-height: 36px");
+  assert.ok(rule.includes("inline-flex"), ".action-btn must use display: inline-flex");
+  assert.ok(rule.includes("align-items: center"), ".action-btn must declare align-items: center");
+});
+
+// ── 27. Mobile CSS: .document-meta-grid collapses at 680px and 460px ─────────
+
+test("screen.css includes .document-meta-grid responsive breakpoints at 680px and 460px", async () => {
+  const src = await fs.readFile(path.resolve("styles/screen.css"), "utf8");
+  const bp680 = src.indexOf("@media (max-width: 680px)");
+  assert.ok(bp680 >= 0, "680px breakpoint must exist");
+  const block680End = src.indexOf("}", src.indexOf(".document-meta-grid", bp680));
+  const block680 = src.slice(bp680, block680End + 1);
+  assert.ok(
+    block680.includes(".document-meta-grid") && block680.includes("repeat(2,"),
+    "680px breakpoint must include .document-meta-grid with 2-column layout"
+  );
+
+  const bp460 = src.indexOf("@media (max-width: 460px)");
+  assert.ok(bp460 >= 0, "460px breakpoint must exist");
+  const block460End = src.indexOf("}", src.indexOf(".document-meta-grid", bp460));
+  const block460 = src.slice(bp460, block460End + 1);
+  assert.ok(
+    block460.includes(".document-meta-grid") && block460.includes("grid-template-columns: 1fr"),
+    "460px breakpoint must include .document-meta-grid with single-column layout"
+  );
+});
