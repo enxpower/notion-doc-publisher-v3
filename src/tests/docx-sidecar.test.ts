@@ -10,7 +10,10 @@
  */
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync, unlinkSync } from "node:fs";
+import { execSync } from "node:child_process";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 // ---------------------------------------------------------------------------
 // package.json script guards
@@ -219,4 +222,63 @@ test("export-doc-docx does not read dist/docs/", () => {
   const src = readFileSync("src/cli/export-doc-docx.ts", "utf8");
   assert.ok(!src.includes("dist/docs"), "export-doc-docx.ts must not read from dist/docs/");
   assert.ok(!src.includes("renderDocumentHtml"), "export-doc-docx.ts must not call renderDocumentHtml");
+});
+
+// ---------------------------------------------------------------------------
+// P0/P1 fix verification — XML-level assertions
+// ---------------------------------------------------------------------------
+
+async function extractDocxXml(buf: Buffer, xmlPath: string): Promise<string> {
+  const tmpFile = join(tmpdir(), `docx-test-${Date.now()}.docx`);
+  try {
+    writeFileSync(tmpFile, buf);
+    return execSync(`unzip -p "${tmpFile}" "${xmlPath}"`).toString("utf8");
+  } finally {
+    try { unlinkSync(tmpFile); } catch { /* ignore */ }
+  }
+}
+
+test("P0-1: heading runs do not suppress bold with w:val=false", async () => {
+  const doc = makeTestDoc({
+    content: [
+      { type: "heading_1", id: "h1", richText: [{ text: "Section One" }] },
+      { type: "heading_2", id: "h2", richText: [{ text: "Subsection" }] },
+      { type: "heading_3", id: "h3", richText: [{ text: "Sub-subsection" }] },
+    ],
+  });
+  const buf = await renderDocumentDocx(doc, makeTestConfig());
+  const xml = await extractDocxXml(buf, "word/document.xml");
+  assert.ok(!xml.includes('<w:b w:val="false"/>'), 'Must not suppress bold with w:val="false"');
+  assert.ok(!xml.includes('<w:b w:val="0"/>'), 'Must not suppress bold with w:val="0"');
+});
+
+test("P0-2: header version does not produce double-v prefix", async () => {
+  const doc = makeTestDoc();
+  const buf = await renderDocumentDocx(doc, makeTestConfig());
+  const xml = await extractDocxXml(buf, "word/header1.xml");
+  assert.ok(!xml.includes("vv"), 'Header XML must not contain "vv" — meta.version already includes the v prefix');
+  assert.ok(xml.includes("v1.0"), 'Header XML must contain the version string "v1.0"');
+});
+
+test("P1-1: DOCX document XML contains eastAsia font attributes", async () => {
+  const doc = makeTestDoc();
+  const buf = await renderDocumentDocx(doc, makeTestConfig());
+  const xml = await extractDocxXml(buf, "word/document.xml");
+  assert.ok(xml.includes("w:eastAsia="), "document.xml must contain w:eastAsia font attributes");
+  assert.ok(
+    xml.includes("Songti SC") || xml.includes("PingFang SC"),
+    "document.xml must reference a CJK font by name"
+  );
+});
+
+test("P1-2: quote block runs do not suppress italics", async () => {
+  const doc = makeTestDoc({
+    content: [
+      { type: "quote", id: "q1", richText: [{ text: "A quoted passage without explicit italic flag." }] },
+    ],
+  });
+  const buf = await renderDocumentDocx(doc, makeTestConfig());
+  const xml = await extractDocxXml(buf, "word/document.xml");
+  assert.ok(!xml.includes('<w:i w:val="false"/>'), 'Must not suppress italics with w:val="false"');
+  assert.ok(!xml.includes('<w:i w:val="0"/>'), 'Must not suppress italics with w:val="0"');
 });

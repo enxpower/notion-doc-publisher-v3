@@ -41,9 +41,9 @@ const FTR_DIST = Math.round(TWIP * 0.4);    // 576 twips
 const IMG_MAX_PX = Math.round(((PAGE_W - MARGIN_L - MARGIN_R) / TWIP) * 96);
 
 // ── Fonts ────────────────────────────────────────────────────────────────────
-const FONT_SERIF = { name: "Georgia", eastAsia: "Songti SC" };
-const FONT_SANS  = { name: "Arial",   eastAsia: "PingFang SC" };
-const FONT_MONO  = { name: "Courier New", eastAsia: "Courier New" };
+const FONT_SERIF = { ascii: "Georgia",     hAnsi: "Georgia",     cs: "Times New Roman", eastAsia: "Songti SC" };
+const FONT_SANS  = { ascii: "Arial",       hAnsi: "Arial",       cs: "Arial",           eastAsia: "PingFang SC" };
+const FONT_MONO  = { ascii: "Courier New", hAnsi: "Courier New", cs: "Courier New",     eastAsia: "Courier New" };
 
 // ── Colours (hex, no #) ──────────────────────────────────────────────────────
 const C_TEXT     = "1a1c20";
@@ -159,7 +159,7 @@ function countNumberedListGroups(blocks: DocumentBlock[]): number {
 // ── Header & footer ──────────────────────────────────────────────────────────
 
 function buildPageHeader(meta: DocumentModel["meta"], brand: { displayName: string }): Header {
-  const ref = [meta.docId, meta.version ? `v${meta.version}` : ""].filter(Boolean).join(" · ");
+  const ref = [meta.docId, meta.version ?? ""].filter(Boolean).join(" · ");
   const borderNone = { style: BorderStyle.NONE, size: 0, color: "FFFFFF" };
 
   return new Header({
@@ -565,12 +565,7 @@ async function renderBlock(
           indent: { left: pt(18), right: pt(6) },
           border: { left: { style: BorderStyle.SINGLE, size: 16, color: C_MUTED } },
           spacing: { before: pt(6), after: pt(6) },
-          children: renderDocxRichText(block.richText).map((r) => {
-            if (r instanceof TextRun) {
-              return new TextRun({ ...r, italic: true } as ConstructorParameters<typeof TextRun>[0]);
-            }
-            return r;
-          }),
+          children: renderDocxRichText(block.richText),
           run: { font: FONT_SERIF, size: hpt(11), color: C_MUTED, italics: true },
         }),
       ];
@@ -661,20 +656,11 @@ export function renderDocxRichText(spans: RichTextSpan[]): (TextRun | ExternalHy
   return spans.map((span) => {
     const runOpts = {
       text: span.text,
-      font: FONT_SERIF,
-      size: hpt(11),
-      color: C_TEXT,
-      bold: span.bold ?? false,
-      italics: span.italic ?? false,
-      underline: span.underline ? { type: UnderlineType.SINGLE } : undefined,
-      strike: span.strike ?? false,
-      ...(span.code
-        ? {
-            font: FONT_MONO,
-            size: hpt(9.5),
-            shading: { type: ShadingType.SOLID, fill: C_CODE_BG, color: "auto" },
-          }
-        : {}),
+      ...(span.bold      ? { bold: true }                                                                            : {}),
+      ...(span.italic    ? { italics: true }                                                                         : {}),
+      ...(span.underline ? { underline: { type: UnderlineType.SINGLE } }                                            : {}),
+      ...(span.strike    ? { strike: true }                                                                          : {}),
+      ...(span.code      ? { font: FONT_MONO, size: hpt(9.5), shading: { type: ShadingType.SOLID, fill: C_CODE_BG, color: "auto" } } : {}),
     };
 
     if (span.href) {
