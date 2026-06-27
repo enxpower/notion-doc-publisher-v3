@@ -212,7 +212,7 @@ function renderBlock(block: DocumentBlock, docId: string): string {
       //   between rows  → 0.5pt light (= td { border-bottom: 1px solid line })
       //   after last row → 0.5pt light
       const parts: string[] = [];
-      parts.push(`  table.hline(stroke: 2pt + ${rgb(C.accent)}),`);
+      parts.push(`  table.hline(stroke: 0.8pt + ${rgb(C.text)}),`);
 
       for (let ri = 0; ri < block.rows.length; ri++) {
         const row = block.rows[ri];
@@ -231,7 +231,7 @@ function renderBlock(block: DocumentBlock, docId: string): string {
           }
         }
         if (ri === 0) {
-          parts.push(`  table.hline(stroke: 1pt + ${rgb(C.strongLine)}),`);
+          parts.push(`  table.hline(stroke: 0.7pt + ${rgb(C.strongLine)}),`);
         } else if (ri < block.rows.length - 1) {
           parts.push(`  table.hline(stroke: 0.5pt + ${rgb(C.line)}),`);
         }
@@ -367,7 +367,7 @@ function renderPreamble(
 // We use slightly wider margins (1.25in left) for contract prose readability.
 #set page(
   paper: "us-letter",
-  margin: (left: 1.25in, right: 1in, top: 1in, bottom: 1in),
+  margin: (left: 0.9in, right: 0.85in, top: 0.85in, bottom: 0.85in),
   header: context {
     if counter(page).get().first() > 1 {
       block(
@@ -424,10 +424,6 @@ function renderPreamble(
   it
 )]
 
-// ── Outline (TOC) entry styling ───────────────────────────────────────────────
-// Applied in #outline() block in the cover zone.
-#show outline.entry: set text(font: (${F.sans}), size: 9.5pt)
-
 // ── Heading show rules ────────────────────────────────────────────────────────
 // Notion heading_1 → = (Typst level 1) → HTML h2
 // print.css h2: margin-top: 9mm; padding-top: 4mm; border-top: 0.2mm solid #ddd; font-size: 15pt
@@ -444,25 +440,25 @@ function renderPreamble(
     #set text(font: (${F.sans}), size: 15pt, weight: "semibold", fill: ${rgb(C.text)})
     #it.body
   ]
-  v(12pt, weak: true)
+  v(16pt, weak: true)
 }
 // print.css h3: margin-top: 7mm; font-size: 13pt
 #show heading.where(level: 2): it => {
   v(20pt, weak: true)
   text(font: (${F.sans}), size: 13pt, weight: "semibold", fill: ${rgb(C.text)})[#it.body]
-  v(9pt, weak: true)
+  v(12pt, weak: true)
 }
 // print.css h4: margin-top: 6mm; font-size: 11pt
 #show heading.where(level: 3): it => {
   v(16pt, weak: true)
   text(font: (${F.sans}), size: 11pt, weight: "semibold", fill: ${rgb(C.text)})[#it.body]
-  v(6pt, weak: true)
+  v(9pt, weak: true)
 }
 // print.css h5: margin-top: 5mm; font-size: 10pt
 #show heading.where(level: 4): it => {
   v(12pt, weak: true)
   text(font: (${F.sans}), size: 10pt, weight: "semibold", fill: ${rgb(C.text)})[#it.body]
-  v(4pt, weak: true)
+  v(7pt, weak: true)
 }
 
 // ── Code show rules ───────────────────────────────────────────────────────────
@@ -564,9 +560,9 @@ function renderCover(
   const parts: string[] = [
     masthead,
     ...mastheadRule,
-    `#v(18pt)`,
+    `#v(8pt)`,
     kicker,
-    `#v(7pt)`,
+    `#v(6pt)`,
     titleEl,
   ];
 
@@ -584,49 +580,12 @@ function renderCover(
     parts.push(metaGrid);
   }
 
-  // Cover separator + TOC + body separator
-  // The #outline() call auto-collects all headings from the document body.
+  // Simple separator before body — no TOC in contract PDFs
   parts.push(`#v(12pt)`);
   parts.push(`#line(length: 100%, stroke: 0.5pt + ${rgb(C.line)})`);
-  // TOC header label
-  parts.push(
-    `#v(12pt)\n` +
-    `#text(font: (${F.sans}), size: 7pt, weight: "bold", fill: ${rgb(C.faint)}, tracking: 0.1em)[目录  CONTENTS]\n` +
-    `#v(5pt)\n` +
-    `#outline(title: none, depth: 2, indent: 1.5em)`
-  );
-  parts.push(`#v(14pt)`);
-  parts.push(`#line(length: 100%, stroke: 0.5pt + ${rgb(C.line)})`);
-  parts.push(`#v(20pt)`);
+  parts.push(`#v(18pt)`);
 
   return parts.join("\n");
-}
-
-// ── Closing document footer ───────────────────────────────────────────────────
-// Mirrors HTML's <footer class="document-footer">:
-//   print.css: border-top: 0.4mm solid #333; BRAND  ·  DOC_ID · Version  at 7pt uppercase
-
-function renderClosingFooter(
-  meta: DocumentModel["meta"],
-  brand: BrandInfo,
-): string {
-  const brandName = escContent(brand.displayName.toUpperCase());
-  const ref = [meta.docId, meta.version ? `v${meta.version.replace(/^v/i, "")}` : ""]
-    .filter(Boolean)
-    .map(escContent)
-    .join(" · ");
-
-  return (
-    `#v(28pt)\n` +
-    `#line(length: 100%, stroke: 1pt + ${rgb(C.accent)})\n` +
-    `#v(7pt)\n` +
-    `#grid(\n` +
-    `  columns: (1fr, auto),\n` +
-    `  align: (left + top, right + top),\n` +
-    `  [#text(font: (${F.sans}), size: 7pt, weight: "bold", fill: ${rgb(C.faint)}, tracking: 0.1em)[${brandName}]],\n` +
-    `  [#text(font: (${F.sans}), size: 7pt, fill: ${rgb(C.faint)})[${ref}]],\n` +
-    `)`
-  );
 }
 
 // ── Signature page detection ──────────────────────────────────────────────────
@@ -654,10 +613,9 @@ export function renderDocumentTypst(
   doc: DocumentModel,
   brand: BrandInfo,
 ): string {
-  const preamble      = renderPreamble(doc.meta, brand);
-  const cover         = renderCover(doc.meta, brand);
-  const closingFooter = renderClosingFooter(doc.meta, brand);
-  const docId         = doc.meta.docId ?? "";
+  const preamble = renderPreamble(doc.meta, brand);
+  const cover    = renderCover(doc.meta, brand);
+  const docId    = doc.meta.docId ?? "";
 
   const bodyParts: string[] = [];
   const blocks = doc.content;
@@ -742,7 +700,6 @@ export function renderDocumentTypst(
   return (
     `${preamble}\n\n` +
     `${cover}\n\n` +
-    `${bodyParts.join("\n\n")}\n\n` +
-    `${closingFooter}`
+    `${bodyParts.join("\n\n")}`
   );
 }
