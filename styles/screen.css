@@ -350,7 +350,12 @@ dd {
 .document-actions {
   display: flex;
   justify-content: flex-end;
+  gap: 8px;
   margin-top: 14px;
+}
+
+.action-btn--download-pdf {
+  text-decoration: none;
 }
 
 .action-btn {
