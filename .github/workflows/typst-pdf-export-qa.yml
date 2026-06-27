@@ -70,7 +70,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: typst-source
-          path: dist/typst/
+          path: prototype/output/*.typ
           if-no-files-found: warn
           retention-days: 14
 
@@ -79,15 +79,15 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: typst-pdf
-          path: dist/pdf/
+          path: prototype/output/*.pdf
           if-no-files-found: warn
           retention-days: 14
 
-      - name: Upload reports
+      - name: Upload all prototype output
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: typst-reports
-          path: dist/reports/
-          if-no-files-found: ignore
+          name: typst-output-all
+          path: prototype/output/**
+          if-no-files-found: warn
           retention-days: 14
