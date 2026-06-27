@@ -17,7 +17,8 @@
     "publish:preview": "npm run assign-id && npm run build && npm run ci:writeback",
     "test": "tsc && node --test \".tmp/tests/\"*.test.js",
     "lint:security": "tsc && node .tmp/cli/security-lint.js",
-    "pdf": "tsc && node .tmp/cli/export-pdf.js"
+    "pdf": "tsc && node .tmp/cli/export-pdf.js",
+    "pdf:export": "tsx src/cli/export-typst.ts"
   },
   "devDependencies": {
     "@types/node": "^20.12.12",
