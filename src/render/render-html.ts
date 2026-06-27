@@ -51,8 +51,7 @@ export async function renderDocumentHtml(document: DocumentModel, config: AppCon
     brand: escapeHtml(brand.displayName),
     sloganBlock,
     topbar: renderTopbar(brand.displayName, ROOT_RELATIVE_FROM_DOC, !isPrivateLink),
-    identity: renderIdentity(meta.docId, meta.documentType.label, meta.version, meta.status, classification),
-    metaStrip: renderMetaStrip(meta.client.label, meta.project.label, updated),
+    metaGrid: renderMetaGrid(meta.docId, meta.documentType.label, meta.version, meta.status, classification, meta.client.label, meta.project.label, updated),
     actions: renderActions(meta.docId),
     toc: renderToc(toc),
     body,
@@ -313,42 +312,35 @@ function renderTopbar(brandLabel: string, rootRelative: string, linkHome = true)
   return `<header class="site-topbar no-print">${brand}</header>`;
 }
 
-function renderIdentity(
+function renderMetaGrid(
   docId: string,
   type: string,
   version: string,
   status: string,
-  classification: Classification
+  classification: Classification,
+  client: string,
+  project: string,
+  updated: string
 ): string {
-  const facts: string[] = [];
-  if (docId) facts.push(`<span class="identity-id">${escapeHtml(docId)}</span>`);
-  if (type) facts.push(`<span>${escapeHtml(type)}</span>`);
-  if (version) facts.push(`<span>Version ${escapeHtml(version)}</span>`);
-  const factLine = facts.join(`<span class="identity-sep">·</span>`);
-  const tags: string[] = [];
-  if (status) tags.push(`<span class="tag status-${slugify(status)}">${escapeHtml(status)}</span>`);
-  tags.push(`<span class="tag ${classification.cls}">${escapeHtml(classification.label)}</span>`);
-  return `<div class="identity-facts">${factLine}</div><div class="identity-tags">${tags.join("")}</div>`;
-}
+  const cell = (label: string, value: string, valueCls = "") => {
+    const v = value
+      ? `<span class="meta-value${valueCls ? ` ${valueCls}` : ""}">${escapeHtml(value)}</span>`
+      : `<span class="meta-value meta-value--empty">—</span>`;
+    return `<div class="meta-item"><span class="meta-label">${escapeHtml(label)}</span>${v}</div>`;
+  };
+  const tagCell = (label: string, tagCls: string, tagLabel: string) =>
+    `<div class="meta-item"><span class="meta-label">${escapeHtml(label)}</span><span class="tag ${tagCls}">${escapeHtml(tagLabel)}</span></div>`;
 
-/**
- * The metadata strip intentionally omits Classification: it is already shown as
- * a chip in the identity line, and repeating it here read as redundant. The
- * strip carries the remaining executive facts.
- */
-function renderMetaStrip(client: string, project: string, updated: string): string {
-  const fields: Array<[string, string]> = [
-    ["Client", client],
-    ["Project", project],
-    ["Updated", updated]
-  ];
-  const cells = fields
-    .map(
-      ([label, value]) =>
-        `<div><dt>${escapeHtml(label)}</dt><dd>${value ? escapeHtml(value) : "<span class=\"meta-empty\">—</span>"}</dd></div>`
-    )
-    .join("");
-  return `<dl class="document-meta">${cells}</dl>`;
+  return [
+    cell("Document ID", docId, "meta-value--id"),
+    cell("Type", type),
+    cell("Version", version),
+    status ? tagCell("Status", `status-${slugify(status)}`, status) : cell("Status", ""),
+    cell("Client", client),
+    cell("Project", project),
+    cell("Updated", updated),
+    tagCell("Access", classification.cls, classification.label),
+  ].join("");
 }
 
 /**

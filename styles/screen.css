@@ -219,42 +219,47 @@ h1:lang(zh) {
   text-justify: inter-ideograph;
 }
 
-/* Refined identity / meta bar: facts on the left, quiet status tags on the
-   right — one cohesive line, not floating UI. */
-.document-identity {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px 20px;
+/* ---- document metadata grid ──────────────────────────────────────────────
+   2-row × 4-column layout replacing the old identity/summary bar. */
+.document-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px 28px;
   margin-top: 18px;
-}
-
-.identity-facts {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
   font-family: var(--font-sans);
-  font-size: 12.5px;
-  color: var(--muted);
 }
 
-.identity-id {
+.meta-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.meta-label {
+  font-size: 10px;
   font-weight: 700;
-  letter-spacing: 0.05em;
-  color: var(--text);
-}
-
-.identity-sep {
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
   color: var(--faint);
 }
 
-.identity-tags {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 16px;
+.meta-value {
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--text);
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+.meta-value--id {
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  font-size: 12.5px;
+}
+
+.meta-value--empty {
+  color: var(--faint);
 }
 
 /* ---- quiet status / classification tags -------------------
@@ -298,48 +303,6 @@ h1:lang(zh) {
   background: #b4453a;
 }
 
-/* ---- executive metadata strip -----------------------------
-   Compact inline label/value pairs; subtle labels, clear values,
-   minimal vertical weight so it never dominates the first page. */
-.document-summary {
-  margin-top: 14px;
-  padding-bottom: 16px;
-}
-
-.document-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 36px;
-  margin: 0;
-}
-
-.document-meta div {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  min-width: 0;
-}
-
-dt {
-  color: var(--faint);
-  font-family: var(--font-sans);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-}
-
-dd {
-  margin: 0;
-  font-family: var(--font-sans);
-  font-size: 13.5px;
-  font-weight: 500;
-  color: var(--text);
-}
-
-.meta-empty {
-  color: var(--faint);
-}
 
 /* ---- actions (web only) -----------------------------------
    Compact, secondary, right-aligned so it does not interrupt the
@@ -357,10 +320,13 @@ dd {
 }
 
 .action-btn {
+  min-height: 36px;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
-  padding: 6px 14px;
+  padding: 0 18px;
+  line-height: 1;
   border: 1px solid var(--line);
   border-radius: 6px;
   background: #fff;
@@ -823,10 +789,6 @@ hr {
     --paper-padding-x: 48px;
     --paper-padding-y: 48px;
   }
-
-  .document-meta {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
 }
 
 @media (max-width: 680px) {
@@ -856,9 +818,9 @@ hr {
     word-break: break-word;
   }
 
-  .document-identity {
-    align-items: flex-start;
-    flex-direction: column;
+  .document-meta-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px 20px;
   }
 }
 
@@ -879,11 +841,6 @@ hr {
     margin-bottom: 8px;
   }
 
-  .document-meta {
-    flex-direction: column;
-    gap: 8px;
-  }
-
   th,
   td {
     padding: 8px 10px;
@@ -900,8 +857,9 @@ hr {
     font-size: 24px;
   }
 
-  .identity-tags {
-    gap: 12px;
+  .document-meta-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
   }
 
   .register-table-wrap {
