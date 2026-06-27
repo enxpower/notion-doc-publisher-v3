@@ -212,19 +212,46 @@ test(".document-actions CSS must not use float (float would cause body text to w
   );
 });
 
-// ── 17. .document-actions must align with the prose measure column ────────────
+// ── 17. .document-actions must not be constrained to --document-measure ───────
 
-test(".document-actions CSS must use max-width: var(--document-measure) so buttons align with the prose column", async () => {
+test(".document-actions CSS must NOT use max-width: var(--document-measure) — buttons must align full-width with masthead/title", async () => {
   const src = await fs.readFile(path.resolve("styles/screen.css"), "utf8");
   const ruleStart = src.indexOf(".document-actions {");
   const ruleEnd = src.indexOf("}", ruleStart);
+  assert.ok(ruleStart >= 0, ".document-actions rule must exist in screen.css");
   const rule = src.slice(ruleStart, ruleEnd + 1);
   assert.ok(
-    rule.includes("max-width: var(--document-measure)"),
-    ".document-actions must declare max-width: var(--document-measure) so Print/Download buttons sit within the same 680px prose column, not 206px to the right of it"
+    !rule.includes("max-width: var(--document-measure)"),
+    ".document-actions must NOT declare max-width: var(--document-measure) — buttons must align to the same full content width as masthead/title"
   );
+});
+
+// ── 18. Prose must not be constrained to --document-measure ───────────────────
+
+test(".document-content > * must not restrict prose to var(--document-measure)", async () => {
+  const src = await fs.readFile(path.resolve("styles/screen.css"), "utf8");
+  const narrowRuleIdx = src.indexOf(".document-content > *");
+  if (narrowRuleIdx >= 0) {
+    const ruleEnd = src.indexOf("}", narrowRuleIdx);
+    const rule = src.slice(narrowRuleIdx, ruleEnd + 1);
+    assert.ok(
+      !rule.includes("max-width: var(--document-measure)"),
+      ".document-content > * must not restrict prose to var(--document-measure) — all content must span the full paper content width"
+    );
+  }
+  // If the selector is absent, the narrow-measure constraint was fully removed — test passes.
+});
+
+// ── 19. TOC must not be constrained to --document-measure ────────────────────
+
+test(".document-toc CSS must NOT use max-width: var(--document-measure)", async () => {
+  const src = await fs.readFile(path.resolve("styles/screen.css"), "utf8");
+  const ruleStart = src.indexOf(".document-toc {");
+  const ruleEnd = src.indexOf("}", ruleStart);
+  assert.ok(ruleStart >= 0, ".document-toc rule must exist in screen.css");
+  const rule = src.slice(ruleStart, ruleEnd + 1);
   assert.ok(
-    rule.includes("clear: both"),
-    ".document-actions must declare clear: both to clear any upstream floats"
+    !rule.includes("max-width: var(--document-measure)"),
+    ".document-toc must NOT declare max-width: var(--document-measure) — TOC must align with the full paper content width, same as masthead/title"
   );
 });
