@@ -237,3 +237,135 @@ test(".typ file is written before Typst binary is checked", async () => {
     ".typ must be written (writeFile) before the !checkTypst() guard"
   );
 });
+
+// ── 13. 5-column table uses payment-style proportional fr widths ──────────────
+
+test("5-column table uses 8fr/8fr/18fr/34fr/32fr payment-milestone column widths", () => {
+  const doc = makeDoc([
+    {
+      type: "table",
+      id: "t5",
+      rows: [
+        [
+          [{ text: "节点" }],
+          [{ text: "比例" }],
+          [{ text: "节点名称" }],
+          [{ text: "最低验收目标" }],
+          [{ text: "付款触发依据" }],
+        ],
+        [
+          [{ text: "M1" }],
+          [{ text: "30%" }],
+          [{ text: "需求评审" }],
+          [{ text: "需求文档完成" }],
+          [{ text: "确认函签署" }],
+        ],
+      ],
+    },
+  ]);
+  const src = renderDocumentTypst(doc, TEST_BRAND);
+  assert.ok(
+    src.includes("8fr, 8fr, 18fr, 34fr, 32fr"),
+    "5-column table must use payment milestone column ratios (8/8/18/34/32)"
+  );
+});
+
+// ── 14. 2-column table uses 28fr/72fr proportional widths ─────────────────────
+
+test("2-column table uses 28fr/72fr proportional column widths", () => {
+  const doc = makeDoc([
+    {
+      type: "table",
+      id: "t2",
+      rows: [
+        [[{ text: "Term" }], [{ text: "Definition" }]],
+        [[{ text: "甲方" }], [{ text: "上海测试公司" }]],
+      ],
+    },
+  ]);
+  const src = renderDocumentTypst(doc, TEST_BRAND);
+  assert.ok(
+    src.includes("28fr, 72fr"),
+    "2-column table must use 28/72 fr proportions"
+  );
+});
+
+// ── 15. 3-column and 4-column tables use fr widths (not auto) ─────────────────
+
+test("3-column and 4-column tables use fr units — no auto columns", () => {
+  for (const [colCount, expectedFrag] of [
+    [3, "20fr, 30fr, 50fr"],
+    [4, "15fr, 20fr, 33fr, 32fr"],
+  ] as [number, string][]) {
+    const headers = Array.from({ length: colCount }, (_, i) => [{ text: `H${i + 1}` }]);
+    const bodyRow = Array.from({ length: colCount }, (_, i) => [{ text: `R${i + 1}` }]);
+    const doc = makeDoc([{ type: "table", id: "t", rows: [headers, bodyRow] }]);
+    const src = renderDocumentTypst(doc, TEST_BRAND);
+    assert.ok(
+      src.includes(expectedFrag),
+      `${colCount}-column table must use fr proportions: ${expectedFrag}`
+    );
+    // Table columns declaration must not use 'auto'
+    const tableStart = src.indexOf("#table(");
+    const columnsLine = src.indexOf("columns:", tableStart);
+    const columnsEnd = src.indexOf("\n", columnsLine);
+    const columnsDecl = src.slice(columnsLine, columnsEnd);
+    assert.ok(
+      !columnsDecl.includes("auto"),
+      `${colCount}-column table columns: line must not use 'auto' — prevents CJK vertical wrapping`
+    );
+  }
+});
+
+// ── 16. Rendered table uses table.header() for repeating header ───────────────
+
+test("rendered table uses table.header() so header repeats on multi-page tables", () => {
+  const doc = makeDoc([
+    {
+      type: "table",
+      id: "t1",
+      rows: [
+        [[{ text: "Header A" }], [{ text: "Header B" }]],
+        [[{ text: "Row 1A" }], [{ text: "Row 1B" }]],
+      ],
+    },
+  ]);
+  const src = renderDocumentTypst(doc, TEST_BRAND);
+  assert.ok(
+    src.includes("table.header("),
+    "Rendered table must use table.header() for repeating header on page breaks"
+  );
+});
+
+// ── 17. render-html.ts has no Typst or PDF renderer references ───────────────
+
+test("render-html.ts contains no Typst or PDF renderer references", async () => {
+  const src = await fs.readFile(path.resolve("src/render/render-html.ts"), "utf8");
+  assert.ok(
+    !src.includes("render-typst"),
+    "render-html.ts must not import render-typst"
+  );
+  assert.ok(
+    !src.toLowerCase().includes("typst"),
+    "render-html.ts must not contain any Typst references"
+  );
+});
+
+// ── 18. styles/print.css is unchanged — standard print rules intact ───────────
+
+test("styles/print.css retains standard print layout rules (unchanged)", async () => {
+  const src = await fs.readFile(path.resolve("styles/print.css"), "utf8");
+  assert.ok(src.includes("@page"), "print.css must still contain @page rule");
+  assert.ok(
+    src.includes("border-collapse: collapse"),
+    "print.css must still declare table border-collapse: collapse"
+  );
+  assert.ok(
+    src.includes("size: letter"),
+    "print.css must still specify US Letter page size"
+  );
+  assert.ok(
+    !src.includes("typst") && !src.includes("render-typst"),
+    "print.css must not contain any Typst references — HTML and PDF renderers are independent"
+  );
+});

@@ -22,7 +22,11 @@
  *   Running page header + footer  (BRAND / DOC_ID · page X of Y)
  *   Signature page: #pagebreak() before 签署页 heading + structured party/field blocks
  *   Divider spacing made weak so heading space always wins
- *   Smart table column widths: auto for all but last col, 1fr for last
+ *   Table column widths: proportional fr units by column count — prevents CJK one-char-per-line
+ *     wrapping that occurs with 'auto' columns that compress below readable width.
+ *     2-col: 28/72  |  3-col: 20/30/50  |  4-col: 15/20/33/32
+ *     5-col: 8/8/18/34/32 (payment/milestone tables)  |  6+ col: equal 1fr
+ *   Table header: table.header() repeats the header row on every page the table spans.
  */
 
 import type {
@@ -81,13 +85,27 @@ function escContent(s: string): string {
     .replace(/~/g, "\\~");
 }
 
-// ── Table column width heuristic ──────────────────────────────────────────────
-// auto for all but the last column (content-sized), 1fr for last.
-// Keeps short codes compact; long-text description column gets remaining width.
+// ── Table column width strategy ────────────────────────────────────────────────
+// Use proportional fr units for all columns so the table spans the full content
+// width and no column is compressed below a readable line width.
+//
+// 'auto' columns shrink to content and cause Chinese text to wrap one character
+// per line when a table has many columns. fr units distribute the full width
+// in fixed ratios, keeping every column readable.
+//
+// Ratios chosen for common Chinese contract table structures:
+//   2-col  28/72  — label + content
+//   3-col  20/30/50 — mixed label / description
+//   4-col  15/20/33/32 — four-way content
+//   5-col  8/8/18/34/32 — payment milestone (节点/比例/节点名称/最低验收目标/付款触发依据)
+//   6+ col equal 1fr each
 function tableColumns(colCount: number): string {
   if (colCount <= 1) return "1fr";
-  if (colCount === 2) return "auto, 1fr";
-  return [...Array(colCount - 1).fill("auto"), "1fr"].join(", ");
+  if (colCount === 2) return "28fr, 72fr";
+  if (colCount === 3) return "20fr, 30fr, 50fr";
+  if (colCount === 4) return "15fr, 20fr, 33fr, 32fr";
+  if (colCount === 5) return "8fr, 8fr, 18fr, 34fr, 32fr";
+  return Array(colCount).fill("1fr").join(", ");
 }
 
 // ── Rich text ─────────────────────────────────────────────────────────────────
@@ -170,27 +188,35 @@ function renderBlock(block: DocumentBlock, docId: string): string {
 
       const cols = tableColumns(colCount);
 
-      // Rules: neutral dark top, light after-header, faint between rows.
-      // Header cells use #text() styling only — no fill property.
+      // Rules: neutral dark top, light after-header (repeating), faint between rows.
+      // Header row is wrapped in table.header() so it repeats on every page the
+      // table spans. Header cells use #text() styling only — no fill property.
       const parts: string[] = [];
       parts.push(`  table.hline(stroke: 0.8pt + ${rgb(C.text)}),`);
 
-      for (let ri = 0; ri < block.rows.length; ri++) {
+      // Header inside table.header() for page-break repetition
+      const headerRow = block.rows[0];
+      const headerCells = headerRow.map((cell) => {
+        const content = renderRichText(cell);
+        return (
+          `    [#text(font: (${F.sans}), size: 7.5pt, weight: "bold", ` +
+          `fill: ${rgb(C.muted)}, tracking: 0.06em)[#upper[${content}]]],`
+        );
+      });
+      parts.push(
+        `  table.header(\n` +
+        headerCells.join("\n") + "\n" +
+        `    table.hline(stroke: 0.7pt + ${rgb(C.strongLine)}),\n` +
+        `  ),`
+      );
+
+      // Body rows
+      for (let ri = 1; ri < block.rows.length; ri++) {
         const row = block.rows[ri];
         for (const cell of row) {
-          const content = renderRichText(cell);
-          if (ri === 0) {
-            parts.push(
-              `  [#text(font: (${F.sans}), size: 7.5pt, weight: "bold", ` +
-              `fill: ${rgb(C.muted)}, tracking: 0.06em)[#upper[${content}]]],`
-            );
-          } else {
-            parts.push(`  [${content}],`);
-          }
+          parts.push(`  [${renderRichText(cell)}],`);
         }
-        if (ri === 0) {
-          parts.push(`  table.hline(stroke: 0.7pt + ${rgb(C.strongLine)}),`);
-        } else if (ri < block.rows.length - 1) {
+        if (ri < block.rows.length - 1) {
           parts.push(`  table.hline(stroke: 0.5pt + ${rgb(C.line)}),`);
         }
       }
@@ -316,7 +342,7 @@ function renderPreamble(
 // ── Page layout ───────────────────────────────────────────────────────────────
 #set page(
   paper: "us-letter",
-  margin: (left: 0.9in, right: 0.85in, top: 0.85in, bottom: 0.85in),
+  margin: (left: 0.8in, right: 0.8in, top: 0.8in, bottom: 0.8in),
   header: context {
     if counter(page).get().first() > 1 {
       block(
@@ -354,7 +380,7 @@ function renderPreamble(
 // ── Base typography ───────────────────────────────────────────────────────────
 // lang: "zh" enables CJK line-break:strict — no mid-word breaks in Chinese.
 #set text(font: (${F.serif}), size: 11pt, fill: ${rgb(C.text)}, lang: "zh")
-#set par(leading: 0.85em, spacing: 12pt, justify: true, first-line-indent: 0pt)
+#set par(leading: 0.85em, spacing: 14pt, justify: true, first-line-indent: 0pt)
 
 // ── List settings ─────────────────────────────────────────────────────────────
 #set list(indent: 0.8em, body-indent: 0.5em)
