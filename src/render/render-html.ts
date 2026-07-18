@@ -52,7 +52,7 @@ export async function renderDocumentHtml(document: DocumentModel, config: AppCon
     sloganBlock,
     topbar: renderTopbar(brand.displayName, ROOT_RELATIVE_FROM_DOC, !isPrivateLink),
     metaGrid: renderMetaGrid(meta.docId, meta.documentType.label, meta.version, meta.status, classification, meta.client.label, meta.project.label, updated),
-    actions: renderActions(meta.docId),
+    actions: renderActions(meta.docId, ROOT_RELATIVE_FROM_DOC),
     toc: renderToc(toc),
     body,
     footer: renderFooter(brand.displayName, meta.docId, meta.version),
@@ -207,9 +207,6 @@ function buildMetaTags(
   lines.push(`<link rel="icon" href="${ROOT_RELATIVE_FROM_DOC}assets/favicon.ico">`);
 
   if (isPrivateLink) {
-    // Use real title and description — both are visible to anyone who opens
-    // the link, so this does not expose private content.
-    // og:url is intentionally omitted to keep the share token out of OG metadata.
     const ogTitle = escapeHtml(truncate(meta.title || `${brand.displayName} Document`, 60));
     const rawDesc = extractDescription(content, brand);
     const ogDesc = rawDesc
@@ -225,7 +222,6 @@ function buildMetaTags(
       lines.push(`<meta property="og:image:width" content="1200">`);
       lines.push(`<meta property="og:image:height" content="630">`);
     }
-    // Intentionally no og:url — share token must not appear in OG metadata
     lines.push(`<meta name="twitter:card" content="${twitterCard}">`);
     lines.push(`<meta name="twitter:title" content="${ogTitle}">`);
     lines.push(`<meta name="twitter:description" content="${ogDesc}">`);
@@ -270,7 +266,7 @@ function extractDescription(content: DocumentBlock[], brand: BrandPresentation):
 
 function truncate(text: string, maxLen: number): string {
   if (text.length <= maxLen) return text;
-  return text.slice(0, maxLen - 1).trimEnd() + "…";
+  return text.slice(0, maxLen - 1).trimEnd() + "\u2026";
 }
 
 function buildRegisterMetaTags(config: AppConfig, rootRelative: string): string {
@@ -325,7 +321,7 @@ function renderMetaGrid(
   const cell = (label: string, value: string, valueCls = "") => {
     const v = value
       ? `<span class="meta-value${valueCls ? ` ${valueCls}` : ""}">${escapeHtml(value)}</span>`
-      : `<span class="meta-value meta-value--empty">—</span>`;
+      : `<span class="meta-value meta-value--empty">\u2014</span>`;
     return `<div class="meta-item"><span class="meta-label">${escapeHtml(label)}</span>${v}</div>`;
   };
   const tagCell = (label: string, tagCls: string, tagLabel: string) =>
@@ -346,13 +342,16 @@ function renderMetaGrid(
 /**
  * Compact, secondary print/download actions.
  * Print opens the browser's native print dialog.
- * Download PDF links to the pre-generated site PDF at /pdf/{DOC_ID}.pdf.
+ * Download PDF links to the pre-generated site PDF at {rootRelative}pdf/{DOC_ID}.pdf.
+ * Uses a relative path (rootRelative) so the link works correctly on both
+ * root deployments (docs.arcbos.com) and sub-path deployments
+ * (e.g. enxpower.github.io/publisher-energize/).
  * Exported for unit testing.
  */
-export function renderActions(docId?: string | null): string {
+export function renderActions(docId?: string | null, rootRelative = "../../"): string {
   const printBtn = `<button type="button" class="action-btn" onclick="window.print()" title="Print this document using your browser" aria-label="Print this document">Print</button>`;
   if (!docId) return printBtn;
-  const pdfBtn = `<a href="/pdf/${escapeHtml(docId)}.pdf" class="action-btn action-btn--download-pdf" title="Download pre-generated PDF" aria-label="Download PDF" download>Download PDF</a>`;
+  const pdfBtn = `<a href="${rootRelative}pdf/${escapeHtml(docId)}.pdf" class="action-btn action-btn--download-pdf" title="Download pre-generated PDF" aria-label="Download PDF" download>Download PDF</a>`;
   return `${printBtn}${pdfBtn}`;
 }
 
@@ -360,20 +359,13 @@ function renderToc(entries: TocEntry[]): string {
   if (entries.length < 4) {
     return "";
   }
-  // Normalize indentation to the shallowest heading actually present. A document
-  // whose sections are all one level (e.g. a contract authored entirely with
-  // Notion heading_2) should render a flat TOC, not one indented across the board.
   const minLevel = Math.min(...entries.map((entry) => entry.level));
   const items = entries
     .map((entry) => {
-      const depth = entry.level - minLevel; // 0 = top level
+      const depth = entry.level - minLevel;
       return `<li class="toc-d${depth}"><a href="#${entry.id}">${escapeHtml(entry.text)}</a></li>`;
     })
     .join("");
-  // Long tables of contents collapse by default so the document title and
-  // opening prose stay above the fold. Native <details> keeps this working
-  // without JavaScript; anchors and entries are unchanged. Print continues to
-  // hide the TOC entirely via print.css.
   const sectionCount = entries.length;
   const isLong = sectionCount > 12;
   return `<nav class="document-toc no-print" aria-label="Contents">
@@ -385,7 +377,7 @@ function renderToc(entries: TocEntry[]): string {
 }
 
 function renderFooter(brandLabel: string, docId: string, version: string): string {
-  const ref = [docId, version ? `Version ${version}` : ""].filter(Boolean).map(escapeHtml).join(" · ");
+  const ref = [docId, version ? `Version ${version}` : ""].filter(Boolean).map(escapeHtml).join(" \u00b7 ");
   return `<div class="footer-row">
           <span class="footer-brand">${escapeHtml(brandLabel)}</span>
           <span class="footer-ref">${ref}</span>
@@ -396,11 +388,6 @@ function renderFooter(brandLabel: string, docId: string, version: string): strin
    Helpers
    ---------------------------------------------------------------- */
 
-/**
- * Adds stable anchor ids to body headings and extracts a table of contents.
- * Operates on the already-escaped HTML from renderBlocks, so heading text in
- * the TOC is safe. h2/h3 feed the TOC; h4 still gets an id for deep-linking.
- */
 function classify(visibility: string, privateLinkNamespace = ""): Classification {
   switch (normalizeVisibility(visibility)) {
     case "public":

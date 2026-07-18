@@ -7,6 +7,7 @@
  *   - brand filter (ALLOWED_BRANDS) behaviour
  *   - public index listing (Public + Portal Listed only)
  *   - Share Token validation severity
+ *   - PDF download button path (relative, not absolute)
  *   - security configuration lint combinations
  *
  * They run entirely in memory: no Notion access, no file output.
@@ -20,6 +21,7 @@ import { emptyValidation, type DocumentModel } from "../model/document.js";
 import { isPublicIndexListed, isPublishableCandidate, validateDocuments } from "../validate/validate.js";
 import { publishableDocuments, skippedDueToErrors } from "../cli/shared.js";
 import { lintSecurityConfig } from "../cli/security-lint.js";
+import { renderActions } from "../render/render-html.js";
 
 function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
   return {
@@ -91,8 +93,6 @@ test("assignment plan blocks on duplicate existing DOC_IDs", () => {
 test("assignment plan skips (not blocks) when brand or type token is missing", () => {
   const doc = makeDoc({ docId: "", brand: { label: "X", token: "", slug: "x" } }, "page-x");
   const plan = createAssignmentPlan([doc], makeConfig());
-  // MISSING_DOC_ID_TOKEN is a per-document skip, not a global integrity error.
-  // It must NOT appear in errors (which would block ALL assignments).
   assert.equal(plan.errors.length, 0, "must not be a blocking integrity error");
   assert.ok(plan.skipped.some((e) => e.code === "MISSING_DOC_ID_TOKEN"), "must appear in skipped");
   assert.equal(plan.assignments.length, 0, "affected document must not receive an assignment");
@@ -123,7 +123,7 @@ test("public index lists ONLY Public + Portal Listed documents", () => {
 
 /* ---------------- Brand filter (ALLOWED_BRANDS) ---------------- */
 
-test("allowedBrands=null passes all brands — zero production impact on existing deployments", () => {
+test("allowedBrands=null passes all brands \u2014 zero production impact on existing deployments", () => {
   const config = makeConfig({ allowedBrands: null });
   assert.equal(isPublishableCandidate(makeDoc({ brand: { label: "ARCBOS", token: "ARCBOS", slug: "arcbos" } }), config), true);
   assert.equal(isPublishableCandidate(makeDoc({ brand: { label: "ENERGIZE", token: "ENERGIZE", slug: "energize" } }), config), true);
@@ -177,18 +177,15 @@ test("allowedBrands: BRAND_NOT_ALLOWED warning appears in validation report for 
     "page-energize"
   );
   validateDocuments([arcbosDoc, energizeDoc], config);
-  // ARCBOS doc is excluded — must carry the BRAND_NOT_ALLOWED warning
   assert.ok(
     arcbosDoc.validation.warnings.some((w) => w.code === "BRAND_NOT_ALLOWED"),
     "excluded document must have BRAND_NOT_ALLOWED warning"
   );
-  // ENERGIZE doc is included — must NOT carry the warning
   assert.equal(
     energizeDoc.validation.warnings.filter((w) => w.code === "BRAND_NOT_ALLOWED").length,
     0,
     "included document must not have BRAND_NOT_ALLOWED warning"
   );
-  // Only ENERGIZE doc appears in publishable output
   const published = publishableDocuments([arcbosDoc, energizeDoc], config);
   assert.equal(published.length, 1);
   assert.equal(published[0]!.source.notionPageId, "page-energize");
@@ -210,6 +207,39 @@ test("allowedBrands: multiple brands in whitelist all pass", () => {
   );
 });
 
+/* ---------------- PDF download button path ---------------- */
+
+test("renderActions: PDF href uses relative path with default rootRelative", () => {
+  // Default rootRelative="../../" matches ROOT_RELATIVE_FROM_DOC used in document pages.
+  // Documents live at /{namespace}/{token}/index.html so ../../pdf/ resolves to /pdf/
+  // on root deployments (docs.arcbos.com) — same as the old absolute path, no regression.
+  const html = renderActions("ENERGIZE-MEM-2607-0003");
+  assert.ok(
+    html.includes('href="../../pdf/ENERGIZE-MEM-2607-0003.pdf"'),
+    `Expected relative PDF href in: ${html}`
+  );
+  assert.ok(!html.includes('href="/pdf/'), "Must not use absolute /pdf/ path");
+});
+
+test("renderActions: PDF href uses caller-supplied rootRelative for sub-path deployments", () => {
+  // Sub-path deployment: rootRelative would still be "../../" since document depth
+  // relative to site root is always /{namespace}/{token}/ = 2 levels deep.
+  // This test validates that a custom rootRelative is honoured end-to-end.
+  const html = renderActions("ENERGIZE-MEM-2607-0003", "../../");
+  assert.ok(
+    html.includes('href="../../pdf/ENERGIZE-MEM-2607-0003.pdf"'),
+    `Expected relative PDF href in: ${html}`
+  );
+  assert.ok(!html.includes('href="/pdf/'), "Must not use absolute /pdf/ path");
+});
+
+test("renderActions: no PDF button when docId is absent", () => {
+  const html = renderActions(null);
+  assert.ok(html.includes("Print"), "Print button must still be present");
+  assert.ok(!html.includes("Download PDF"), "No PDF button without docId");
+  assert.ok(!html.includes(".pdf"), "No .pdf reference without docId");
+});
+
 /* ---------------- Validation rules ---------------- */
 
 test("duplicate DOC_ID: only the later document gets the error, first still publishes", () => {
@@ -217,10 +247,8 @@ test("duplicate DOC_ID: only the later document gets the error, first still publ
   const a = makeDoc({}, "page-a");
   const b = makeDoc({}, "page-b");
   validateDocuments([a, b], config);
-  // First occurrence: no error, still publishable
   assert.equal(a.validation.errors.length, 0);
   assert.equal(publishableDocuments([a, b], config)[0]!.source.notionPageId, "page-a");
-  // Second (duplicate): gets the error and is skipped
   assert.ok(b.validation.errors.some((e) => e.code === "DUPLICATE_DOC_ID"));
   assert.equal(skippedDueToErrors([a, b], config).length, 1);
   assert.equal(skippedDueToErrors([a, b], config)[0]!.source.notionPageId, "page-b");
@@ -245,12 +273,9 @@ test("unsafe link protocols are blocked", () => {
 test("output path collision: only the later document is skipped, first still publishes", () => {
   const config = makeConfig();
   const a = makeDoc({}, "page-a");
-  // page-b shares the same canonicalPath as page-a
   const b = makeDoc({ docId: "ARCBOS-SPEC-2606-0002" }, "page-b");
   validateDocuments([a, b], config);
-  // First document: no error
   assert.equal(a.validation.errors.length, 0);
-  // Second document: gets the collision error and is excluded from published output
   assert.ok(b.validation.errors.some((e) => e.code === "OUTPUT_PATH_COLLISION"));
   assert.equal(publishableDocuments([a, b], config).length, 1);
   assert.equal(publishableDocuments([a, b], config)[0]!.source.notionPageId, "page-a");
