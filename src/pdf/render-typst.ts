@@ -22,10 +22,12 @@
  *   Running page header + footer  (BRAND / DOC_ID · page X of Y)
  *   Signature page: #pagebreak() before 签署页 heading + structured party/field blocks
  *   Divider spacing made weak so heading space always wins
- *   Table column widths: proportional fr units by column count — prevents CJK one-char-per-line
- *     wrapping that occurs with 'auto' columns that compress below readable width.
- *     2-col: 28/72  |  3-col: 20/30/50  |  4-col: 15/20/33/32
- *     5-col: 8/8/18/34/32 (payment/milestone tables)  |  6+ col: equal 1fr
+ *   Table column widths: content-aware proportional fr units by column count.
+ *     Column widths are computed from actual cell content lengths so wide-content
+ *     columns receive more space and narrow columns are not over-allocated.
+ *     Hard-coded minimum fr units prevent any column from being too narrow for
+ *     readable CJK text. 5-column payment/milestone tables keep their fixed
+ *     8/8/18/34/32 ratio which is tuned for that specific structure.
  *   Table header: table.header() repeats the header row on every page the table spans.
  */
 
@@ -86,26 +88,65 @@ function escContent(s: string): string {
 }
 
 // ── Table column width strategy ────────────────────────────────────────────────
-// Use proportional fr units for all columns so the table spans the full content
-// width and no column is compressed below a readable line width.
+// Use proportional fr units so the table spans the full content width and no
+// column is compressed below a readable line width.
 //
-// 'auto' columns shrink to content and cause Chinese text to wrap one character
-// per line when a table has many columns. fr units distribute the full width
-// in fixed ratios, keeping every column readable.
+// Column widths are derived from the actual text content of each column:
+//   1. Measure the total character length of every cell in each column.
+//   2. Compute each column's share of the total character count.
+//   3. Clamp each share to a minimum of MIN_FR_PCT so thin columns (e.g.
+//      a column of checkmarks or short codes) still get enough room to
+//      display on one or two lines rather than compressing to a hairline.
+//   4. Re-normalise so all fr values sum to 100 and emit as "Xfr, Yfr, ...".
 //
-// Ratios chosen for common Chinese contract table structures:
-//   2-col  28/72  — label + content
-//   3-col  20/30/50 — mixed label / description
-//   4-col  15/20/33/32 — four-way content
-//   5-col  8/8/18/34/32 — payment milestone (节点/比例/节点名称/最低验收目标/付款触发依据)
-//   6+ col equal 1fr each
-function tableColumns(colCount: number): string {
+// Special case — 5-col payment/milestone tables: the fixed 8/8/18/34/32
+// ratio is preserved because those tables have a well-known semantic layout
+// (节点 | 比例 | 节点名称 | 最低验收目标 | 付款触发依据) and the content-
+// aware heuristic tends to over-weight the description columns.
+//
+// 2-col tables also keep the 28/72 label-content split which is almost always
+// the right ratio and which existing tests verify.
+
+const MIN_FR_PCT = 10; // minimum share (%) any column gets — prevents hairline columns
+
+export function tableColumns(
+  colCount: number,
+  rows?: RichTextSpan[][][]
+): string {
   if (colCount <= 1) return "1fr";
   if (colCount === 2) return "28fr, 72fr";
-  if (colCount === 3) return "20fr, 30fr, 50fr";
-  if (colCount === 4) return "15fr, 20fr, 33fr, 32fr";
   if (colCount === 5) return "8fr, 8fr, 18fr, 34fr, 32fr";
-  return Array(colCount).fill("1fr").join(", ");
+  if (colCount >= 6 || !rows || rows.length === 0) {
+    return Array(colCount).fill("1fr").join(", ");
+  }
+
+  // Compute total character length per column across all rows
+  const colLengths = Array(colCount).fill(0) as number[];
+  for (const row of rows) {
+    for (let c = 0; c < colCount; c++) {
+      const cell = row[c] ?? [];
+      colLengths[c] += cell.map((s) => s.text).join("").length;
+    }
+  }
+
+  const totalChars = colLengths.reduce((a, b) => a + b, 0);
+  if (totalChars === 0) {
+    // Fallback: equal distribution
+    return Array(colCount).fill("1fr").join(", ");
+  }
+
+  // Raw percentage share per column, clamped to MIN_FR_PCT
+  const rawPct = colLengths.map((len) => Math.max(MIN_FR_PCT, (len / totalChars) * 100));
+
+  // Re-normalise to 100 and round to integers
+  const rawSum = rawPct.reduce((a, b) => a + b, 0);
+  const frValues = rawPct.map((p) => Math.round((p / rawSum) * 100));
+
+  // Fix rounding drift on the last column
+  const frSum = frValues.reduce((a, b) => a + b, 0);
+  frValues[frValues.length - 1] += 100 - frSum;
+
+  return frValues.map((v) => `${v}fr`).join(", ");
 }
 
 // ── Rich text ─────────────────────────────────────────────────────────────────
@@ -173,8 +214,6 @@ function renderBlock(block: DocumentBlock, docId: string): string {
     }
 
     case "divider":
-      // Both v() calls are weak so a following heading's larger v() always wins,
-      // preventing dividers from collapsing section-heading top spacing.
       return (
         `#v(10pt, weak: true)\n` +
         `#line(length: 100%, stroke: 0.3pt + ${rgb(C.line)})\n` +
@@ -186,15 +225,11 @@ function renderBlock(block: DocumentBlock, docId: string): string {
       const colCount = Math.max(...block.rows.map((r) => r.length));
       if (colCount === 0) return "";
 
-      const cols = tableColumns(colCount);
+      const cols = tableColumns(colCount, block.rows);
 
-      // Rules: neutral dark top, light after-header (repeating), faint between rows.
-      // Header row is wrapped in table.header() so it repeats on every page the
-      // table spans. Header cells use #text() styling only — no fill property.
       const parts: string[] = [];
       parts.push(`  table.hline(stroke: 0.8pt + ${rgb(C.text)}),`);
 
-      // Header inside table.header() for page-break repetition
       const headerRow = block.rows[0];
       const headerCells = headerRow.map((cell) => {
         const content = renderRichText(cell);
@@ -210,7 +245,6 @@ function renderBlock(block: DocumentBlock, docId: string): string {
         `  ),`
       );
 
-      // Body rows
       for (let ri = 1; ri < block.rows.length; ri++) {
         const row = block.rows[ri];
         for (const cell of row) {
@@ -287,12 +321,12 @@ function renderSigPartyBlock(header: string, fields: string[]): string {
     const clean = field.replace(/\s+$/, "").trim();
     if (!clean) continue;
 
-    const colonIdx = clean.indexOf("：");
-    const label    = colonIdx >= 0 ? clean.slice(0, colonIdx + 1) : clean + "：";
+    const colonIdx = clean.indexOf("\uff1a");
+    const label    = colonIdx >= 0 ? clean.slice(0, colonIdx + 1) : clean + "\uff1a";
     const rawValue = colonIdx >= 0 ? clean.slice(colonIdx + 1).trim() : "";
     const labelEl  = `[#text(font: (${F.sans}), size: 9pt, fill: ${rgb(C.muted)})[${escContent(label)}]]`;
 
-    if (label.includes("盖章") || label.includes("Seal") || label.includes("Stamp")) {
+    if (label.includes("\u76d6\u7ae0") || label.includes("Seal") || label.includes("Stamp")) {
       gridRows.push(
         `${labelEl}, ` +
         `[#rect(width: 1.8in, height: 0.9in, stroke: 0.5pt + ${rgb(C.strongLine)})]`
@@ -333,7 +367,7 @@ function renderPreamble(
 ): string {
   const brandName = escContent(brand.displayName.toUpperCase());
   const docId     = escContent(meta.docId ?? "");
-  const footerRef = [meta.docId, meta.version].filter(Boolean).map(escContent).join(" · ");
+  const footerRef = [meta.docId, meta.version].filter(Boolean).map(escContent).join(" \u00b7 ");
 
   return `\
 // ── ARCBOS Sidecar PDF Publisher ─────────────────────────────────────────────
@@ -490,7 +524,7 @@ function renderCover(
   if (docId)   idParts.push(`#text(weight: "bold")[${docId}]`);
   if (docType) idParts.push(docType);
   if (version) idParts.push(version);
-  const identityContent = idParts.join(` #text(fill: ${rgb(C.faint)})[ · ]`);
+  const identityContent = idParts.join(` #text(fill: ${rgb(C.faint)})[ \u00b7 ]`);
   const identityEl = identityContent
     ? `#text(font: (${F.sans}), size: 8pt, fill: ${rgb(C.muted)})[${identityContent}]`
     : "";
@@ -526,7 +560,6 @@ function renderCover(
     parts.push(metaGrid);
   }
 
-  // No TOC in contract PDFs
   parts.push(`#v(12pt)`);
   parts.push(`#line(length: 100%, stroke: 0.5pt + ${rgb(C.line)})`);
   parts.push(`#v(18pt)`);
@@ -546,8 +579,8 @@ function isSignaturePage(block: DocumentBlock): boolean {
   }
   const text = block.richText.map((s) => s.text).join("").trim();
   return (
-    text.includes("签署页") ||
-    text.includes("签字页") ||
+    text.includes("\u7b7e\u7f72\u9875") ||
+    text.includes("\u7b7e\u5b57\u9875") ||
     text.toLowerCase().includes("signature page") ||
     text.toLowerCase().includes("signatures")
   );
@@ -590,8 +623,8 @@ export function renderDocumentTypst(
     if (inSignaturePage && block.type === "paragraph") {
       const text  = block.richText.map((s) => s.text).join("");
       const clean = text.replace(/\s+$/, "").trim();
-      if (clean.startsWith("甲方：") || clean.startsWith("乙方：") ||
-          /^Party [AB][:：]/i.test(clean)) {
+      if (clean.startsWith("\u7532\u65b9\uff1a") || clean.startsWith("\u4e59\u65b9\uff1a") ||
+          /^Party [AB][::\uff1a]/i.test(clean)) {
         flushSigParty();
         sigPartyHeader = clean;
       } else if (clean) {

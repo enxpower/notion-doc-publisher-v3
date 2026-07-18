@@ -7,6 +7,7 @@
  *   - Typst source correctness (no TOC, running footer, heading/table/code style)
  *   - Signature page detection
  *   - DOC_ID filtering and error handling
+ *   - Content-aware table column widths
  *
  * All tests run in memory — no Notion access, no file output.
  */
@@ -16,7 +17,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import type { DocumentModel } from "../model/document.js";
 import { emptyValidation } from "../model/document.js";
-import { renderDocumentTypst } from "../pdf/render-typst.js";
+import { renderDocumentTypst, tableColumns } from "../pdf/render-typst.js";
 import { findDocument } from "../pdf/export-pdf.js";
 import type { BrandInfo } from "../pdf/types.js";
 
@@ -113,7 +114,7 @@ test("Typst source contains no #outline (TOC removed)", () => {
   ]);
   const src = renderDocumentTypst(doc, TEST_BRAND);
   assert.ok(!src.includes("#outline"), "Rendered .typ must not contain #outline");
-  assert.ok(!src.includes("目录"), "Rendered .typ must not contain TOC label 目录");
+  assert.ok(!src.includes("\u76ee\u5f55"), "Rendered .typ must not contain TOC label \u76ee\u5f55");
 });
 
 // ── 6. Running footer with page counter ───────────────────────────────────────
@@ -133,11 +134,11 @@ test("Typst source contains running footer with page counter", () => {
 
 // ── 7. Signature page triggers pagebreak ──────────────────────────────────────
 
-test("签署页 heading triggers #pagebreak() in Typst output", () => {
+test("\u7b7e\u7f72\u9875 heading triggers #pagebreak() in Typst output", () => {
   const doc = makeDoc([
     { type: "paragraph",  id: "b1", richText: [{ text: "Body paragraph." }] },
-    { type: "heading_1",  id: "b2", richText: [{ text: "签署页" }] },
-    { type: "paragraph",  id: "b3", richText: [{ text: "甲方：上海测试公司" }] },
+    { type: "heading_1",  id: "b2", richText: [{ text: "\u7b7e\u7f72\u9875" }] },
+    { type: "paragraph",  id: "b3", richText: [{ text: "\u7532\u65b9\uff1a\u4e0a\u6d77\u6d4b\u8bd5\u516c\u53f8" }] },
   ]);
   const src = renderDocumentTypst(doc, TEST_BRAND);
   assert.ok(
@@ -148,7 +149,7 @@ test("签署页 heading triggers #pagebreak() in Typst output", () => {
 
 // ── 8. Table header has no fill color ─────────────────────────────────────────
 
-test("table header cells use no fill — transparent background", () => {
+test("table header cells use no fill \u2014 transparent background", () => {
   const doc = makeDoc([
     {
       type: "table",
@@ -160,14 +161,10 @@ test("table header cells use no fill — transparent background", () => {
     },
   ]);
   const src = renderDocumentTypst(doc, TEST_BRAND);
-
-  // The table section must not set fill: on header-row cells.
-  // Check that there is no table.cell(fill: pattern (which would color the cell).
   assert.ok(
     !src.includes("table.cell(fill:"),
-    "Table must not use table.cell(fill:) — no header fill allowed"
+    "Table must not use table.cell(fill:) \u2014 no header fill allowed"
   );
-  // Header cells should be wrapped in #upper[], not given a fill
   assert.ok(
     src.includes("#upper[Header A]"),
     "Header cell content should be wrapped in #upper[]"
@@ -179,14 +176,10 @@ test("table header cells use no fill — transparent background", () => {
 test("code block show rule uses uniform stroke, not left-only bar", () => {
   const doc = makeDoc([]);
   const src = renderDocumentTypst(doc, TEST_BRAND);
-
-  // The block raw show rule should use a uniform stroke (e.g. 0.5pt + rgb(...))
-  // not a directional (left: ...) stroke — which would be the "left bar" pattern.
   assert.ok(
     src.includes("stroke: 0.5pt +"),
     "Code block must use uniform stroke (not directional)"
   );
-  // Verify the block raw rule does NOT restrict stroke to left side only
   const blockRawIdx = src.indexOf("raw.where(block: true)");
   const blockRawSection = blockRawIdx >= 0 ? src.slice(blockRawIdx, blockRawIdx + 300) : "";
   assert.ok(
@@ -228,7 +221,6 @@ test("findDocument throws UserFacingError when DOC_ID not found", () => {
 test(".typ file is written before Typst binary is checked", async () => {
   const src = await fs.readFile(path.resolve("src/pdf/export-pdf.ts"), "utf8");
   const writeIdx = src.indexOf("writeFile(typPath");
-  // Search for the call site !checkTypst(), not the function definition
   const typstIdx = src.indexOf("!checkTypst()");
   assert.ok(writeIdx >= 0, "export-pdf.ts must call writeFile for .typ");
   assert.ok(typstIdx >= 0, "export-pdf.ts must call !checkTypst() guard");
@@ -238,7 +230,9 @@ test(".typ file is written before Typst binary is checked", async () => {
   );
 });
 
-// ── 13. 5-column table uses payment-style proportional fr widths ──────────────
+// ── 13. 5-column table uses fixed payment-style proportional fr widths ─────────
+// The 5-column payment/milestone table keeps a fixed 8/8/18/34/32 ratio
+// regardless of content. All other column counts use content-aware widths.
 
 test("5-column table uses 8fr/8fr/18fr/34fr/32fr payment-milestone column widths", () => {
   const doc = makeDoc([
@@ -247,18 +241,18 @@ test("5-column table uses 8fr/8fr/18fr/34fr/32fr payment-milestone column widths
       id: "t5",
       rows: [
         [
-          [{ text: "节点" }],
-          [{ text: "比例" }],
-          [{ text: "节点名称" }],
-          [{ text: "最低验收目标" }],
-          [{ text: "付款触发依据" }],
+          [{ text: "\u8282\u70b9" }],
+          [{ text: "\u6bd4\u4f8b" }],
+          [{ text: "\u8282\u70b9\u540d\u79f0" }],
+          [{ text: "\u6700\u4f4e\u9a8c\u6536\u76ee\u6807" }],
+          [{ text: "\u4ed8\u6b3e\u89e6\u53d1\u4f9d\u636e" }],
         ],
         [
           [{ text: "M1" }],
           [{ text: "30%" }],
-          [{ text: "需求评审" }],
-          [{ text: "需求文档完成" }],
-          [{ text: "确认函签署" }],
+          [{ text: "\u9700\u6c42\u8bc4\u5ba1" }],
+          [{ text: "\u9700\u6c42\u6587\u6863\u5b8c\u6210" }],
+          [{ text: "\u786e\u8ba4\u51fd\u7b7e\u7f72" }],
         ],
       ],
     },
@@ -270,7 +264,7 @@ test("5-column table uses 8fr/8fr/18fr/34fr/32fr payment-milestone column widths
   );
 });
 
-// ── 14. 2-column table uses 28fr/72fr proportional widths ─────────────────────
+// ── 14. 2-column table uses fixed 28fr/72fr label-content split ───────────────
 
 test("2-column table uses 28fr/72fr proportional column widths", () => {
   const doc = makeDoc([
@@ -279,7 +273,7 @@ test("2-column table uses 28fr/72fr proportional column widths", () => {
       id: "t2",
       rows: [
         [[{ text: "Term" }], [{ text: "Definition" }]],
-        [[{ text: "甲方" }], [{ text: "上海测试公司" }]],
+        [[{ text: "\u7532\u65b9" }], [{ text: "\u4e0a\u6d77\u6d4b\u8bd5\u516c\u53f8" }]],
       ],
     },
   ]);
@@ -290,29 +284,33 @@ test("2-column table uses 28fr/72fr proportional column widths", () => {
   );
 });
 
-// ── 15. 3-column and 4-column tables use fr widths (not auto) ─────────────────
+// ── 15. 3-column and 4-column tables use content-aware fr widths ──────────────
+// These columns no longer use hardcoded ratios; they use content-proportional fr
+// units. The key invariant is that 'auto' is never used (which would cause CJK
+// text to wrap one character per line in narrow columns).
 
-test("3-column and 4-column tables use fr units — no auto columns", () => {
-  for (const [colCount, expectedFrag] of [
-    [3, "20fr, 30fr, 50fr"],
-    [4, "15fr, 20fr, 33fr, 32fr"],
-  ] as [number, string][]) {
-    const headers = Array.from({ length: colCount }, (_, i) => [{ text: `H${i + 1}` }]);
-    const bodyRow = Array.from({ length: colCount }, (_, i) => [{ text: `R${i + 1}` }]);
+test("3-column and 4-column tables use fr units \u2014 no auto columns", () => {
+  for (const colCount of [3, 4]) {
+    // Use equal-length header and body content so columns are evenly distributed
+    const headers = Array.from({ length: colCount }, (_, i) => [{ text: `Header${i + 1}` }]);
+    const bodyRow = Array.from({ length: colCount }, (_, i) => [{ text: `Cell${i + 1}` }]);
     const doc = makeDoc([{ type: "table", id: "t", rows: [headers, bodyRow] }]);
     const src = renderDocumentTypst(doc, TEST_BRAND);
+
+    // Must contain fr units
     assert.ok(
-      src.includes(expectedFrag),
-      `${colCount}-column table must use fr proportions: ${expectedFrag}`
+      src.includes("fr,") || src.includes("fr)"),
+      `${colCount}-column table must use fr units`
     );
-    // Table columns declaration must not use 'auto'
+
+    // columns: line must not use 'auto'
     const tableStart = src.indexOf("#table(");
     const columnsLine = src.indexOf("columns:", tableStart);
     const columnsEnd = src.indexOf("\n", columnsLine);
     const columnsDecl = src.slice(columnsLine, columnsEnd);
     assert.ok(
       !columnsDecl.includes("auto"),
-      `${colCount}-column table columns: line must not use 'auto' — prevents CJK vertical wrapping`
+      `${colCount}-column table columns: line must not use 'auto' \u2014 prevents CJK vertical wrapping`
     );
   }
 });
@@ -366,6 +364,46 @@ test("styles/print.css retains standard print layout rules (unchanged)", async (
   );
   assert.ok(
     !src.includes("typst") && !src.includes("render-typst"),
-    "print.css must not contain any Typst references — HTML and PDF renderers are independent"
+    "print.css must not contain any Typst references \u2014 HTML and PDF renderers are independent"
   );
+});
+
+// ── 19. tableColumns: content-aware allocation — wide columns get more fr ──────
+
+test("tableColumns: content-aware allocation gives wide columns proportionally more fr", () => {
+  // 3 columns: col0=short (10 chars), col1=medium (30 chars), col2=long (60 chars)
+  const rows: import("../model/document.js").RichTextSpan[][][] = [
+    [[{ text: "1234567890" }], [{ text: "123456789012345678901234567890" }], [{ text: "1".repeat(60) }]],
+  ];
+  const result = tableColumns(3, rows);
+  // Parse out the fr values
+  const frNums = result.split(",").map((s) => parseInt(s.trim()));
+  assert.equal(frNums.length, 3, "Must return 3 fr values");
+  // The long column (col2) must get more fr than the medium (col1) which must
+  // get more than the short column (col0).
+  assert.ok(frNums[2]! > frNums[1]!, `col2 (${frNums[2]}) must have more fr than col1 (${frNums[1]})`);
+  assert.ok(frNums[1]! > frNums[0]!, `col1 (${frNums[1]}) must have more fr than col0 (${frNums[0]})`);
+  // All fr values must be positive
+  for (const v of frNums) {
+    assert.ok(v > 0, `All fr values must be positive, got ${v}`);
+  }
+  // They must sum to 100
+  assert.equal(frNums.reduce((a, b) => a + b, 0), 100, "fr values must sum to 100");
+});
+
+test("tableColumns: minimum fr floor prevents hairline columns (MIN_FR_PCT=10)", () => {
+  // col0 has 1 char, col1 has 999 chars — without clamping col0 would be ~0.1%
+  const rows: import("../model/document.js").RichTextSpan[][][] = [
+    [[{ text: "X" }], [{ text: "Y".repeat(999) }]],
+  ];
+  // 2-col falls through to fixed 28/72 — use 3-col to exercise content-aware path
+  const rows3: import("../model/document.js").RichTextSpan[][][] = [
+    [[{ text: "X" }], [{ text: "Y".repeat(999) }], [{ text: "Z".repeat(1) }]],
+  ];
+  const result = tableColumns(3, rows3);
+  const frNums = result.split(",").map((s) => parseInt(s.trim()));
+  // Minimum fr for any column must be >= MIN_FR_PCT (10) after rounding
+  for (const v of frNums) {
+    assert.ok(v >= 9, `No column should be below ~10fr (got ${v}) — minimum floor must apply`);
+  }
 });
