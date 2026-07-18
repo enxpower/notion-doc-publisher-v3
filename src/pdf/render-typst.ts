@@ -2,22 +2,10 @@
  * Typst PDF renderer — sidecar PDF publisher.
  *
  * Table column widths use absolute inch values (not fr units) to prevent
- * Typst from expanding columns based on header cell content width.
- * When fr units are used, Typst enforces a minimum column width equal to
- * the widest non-wrappable word in the header, which causes narrow columns
- * to steal space from wider ones and produces the "collapsed Activity column"
- * symptom seen in CA-PEP01 (the header text "Source (Proposal Ref.)" is
- * wider than 15fr would normally allow, forcing col1 to shrink to almost 0).
+ * Typst from expanding columns based on header cell minimum content width.
  *
- * Absolute inch values are computed from the US Letter text area width
- * (8.5in - 2×0.8in = 6.9in) and the same proportional ratios, so the
- * visual result is identical to the intended fr layout but immune to
- * minimum-content-width expansion.
- *
- * Font stacks: Liberation fonts are listed first because the CI environment
- * (ubuntu-latest + fonts-liberation + fonts-noto-cjk) does not have
- * Times New Roman, Arial, or Courier New. Liberation fonts are
- * metric-compatible substitutes that ship with fonts-liberation.
+ * Font stacks: Liberation fonts listed first for CI compatibility.
+ * (ubuntu-latest + fonts-liberation + fonts-noto-cjk)
  */
 
 import type {
@@ -76,34 +64,24 @@ function escContent(s: string): string {
     .replace(/~/g, "\\~");
 }
 
-// ── Table column width strategy ───────────────────────────────────────────────
+// ── Table column widths (absolute inches) ──────────────────────────────────
+// Must use absolute inch values, NOT fr units.
+// fr units expand a column to fit its minimum content width before distributing
+// remaining space, which causes header labels like "Source (Proposal Ref.)"
+// to force-widen a column and collapse the adjacent Activity column.
+// Absolute values are immune to this: the column is exactly the specified
+// width and text wraps within it.
 //
-// MUST use absolute inch values, NOT fr units.
-//
-// Root cause of the "collapsed column" bug:
-//   Typst fr units distribute free space AFTER satisfying each column's
-//   minimum content width. If a header cell contains a long non-breaking
-//   phrase (e.g. "Source (Proposal Ref.)"), Typst widens that column to
-//   fit the phrase before distributing the remaining space by fr ratio.
-//   This silently shrinks all other columns, making the Activity column
-//   collapse to near-zero width.
-//
-// Absolute inch values bypass minimum-content-width calculation entirely:
-//   the column is exactly the specified width regardless of cell content,
-//   and text wraps within that fixed width.
-//
-// Text area width: 8.5in - 2×0.8in margin = 6.9in
-// Ratios and resulting absolute widths:
-//   2-col  28/72        → 1.93in, 4.97in   (label + content)
-//   3-col  20/30/50     → 1.38in, 2.07in, 3.45in
-//   4-col  25/15/35/25  → 1.73in, 1.04in, 2.42in, 1.73in  (activity/source/desc/resp)
-//   5-col  8/8/18/34/32 → 0.55in, 0.55in, 1.24in, 2.35in, 2.21in  (payment milestone)
-//   6+col  equal 1fr each (too many columns to assign semantic widths)
+// Text area: 8.5in - 2×0.8in = 6.9in total
+//   2-col: 1.93in + 4.97in = 6.90in  (label / content)
+//   3-col: 1.38in + 2.07in + 3.45in = 6.90in
+//   4-col: 2.20in + 0.80in + 2.50in + 1.40in = 6.90in  (activity/source/desc/resp)
+//   5-col: 0.55in + 0.55in + 1.24in + 2.35in + 2.21in = 6.90in  (payment milestone)
 function tableColumns(colCount: number): string {
   if (colCount <= 1) return "1fr";
   if (colCount === 2) return "1.93in, 4.97in";
   if (colCount === 3) return "1.38in, 2.07in, 3.45in";
-  if (colCount === 4) return "1.73in, 1.04in, 2.42in, 1.73in";
+  if (colCount === 4) return "2.20in, 0.80in, 2.50in, 1.40in";
   if (colCount === 5) return "0.55in, 0.55in, 1.24in, 2.35in, 2.21in";
   return Array(colCount).fill("1fr").join(", ");
 }
@@ -371,8 +349,10 @@ function renderPreamble(
 )
 
 // ── Base typography ───────────────────────────────────────────────────────────
+// justify: true for body prose only. Headings and cover elements override
+// this with their own #set par or are wrapped in non-justified blocks.
 #set text(font: (${F.serif}), size: 11pt, fill: ${rgb(C.text)}, lang: "zh")
-#set par(leading: 0.85em, spacing: 14pt, justify: true, first-line-indent: 0pt)
+#set par(leading: 0.85em, spacing: 14pt, justify: false, first-line-indent: 0pt)
 
 // ── List settings ─────────────────────────────────────────────────────────────
 #set list(indent: 0.8em, body-indent: 0.5em)
@@ -386,6 +366,7 @@ function renderPreamble(
 )]
 
 // ── Heading show rules ────────────────────────────────────────────────────────
+// Each heading sets justify: false so words are not stretched across the line.
 #set heading(bookmarked: true)
 #show heading.where(level: 1): it => {
   v(26pt, weak: true)
@@ -394,6 +375,7 @@ function renderPreamble(
     stroke: (top: 0.5pt + ${rgb(C.line)}),
     inset: (top: 10pt, bottom: 0pt),
   )[
+    #set par(justify: false)
     #set text(font: (${F.sans}), size: 15pt, weight: "semibold", fill: ${rgb(C.text)})
     #it.body
   ]
@@ -401,17 +383,26 @@ function renderPreamble(
 }
 #show heading.where(level: 2): it => {
   v(20pt, weak: true)
-  text(font: (${F.sans}), size: 13pt, weight: "semibold", fill: ${rgb(C.text)})[#it.body]
+  block(width: 100%)[
+    #set par(justify: false)
+    #text(font: (${F.sans}), size: 13pt, weight: "semibold", fill: ${rgb(C.text)})[#it.body]
+  ]
   v(12pt, weak: true)
 }
 #show heading.where(level: 3): it => {
   v(16pt, weak: true)
-  text(font: (${F.sans}), size: 11pt, weight: "semibold", fill: ${rgb(C.text)})[#it.body]
+  block(width: 100%)[
+    #set par(justify: false)
+    #text(font: (${F.sans}), size: 11pt, weight: "semibold", fill: ${rgb(C.text)})[#it.body]
+  ]
   v(9pt, weak: true)
 }
 #show heading.where(level: 4): it => {
   v(12pt, weak: true)
-  text(font: (${F.sans}), size: 10pt, weight: "semibold", fill: ${rgb(C.text)})[#it.body]
+  block(width: 100%)[
+    #set par(justify: false)
+    #text(font: (${F.sans}), size: 10pt, weight: "semibold", fill: ${rgb(C.text)})[#it.body]
+  ]
   v(7pt, weak: true)
 }
 
@@ -474,7 +465,13 @@ function renderCover(
   ];
 
   const kicker  = `#text(font: (${F.sans}), size: 7pt, weight: "bold", fill: ${rgb(C.muted)}, tracking: 0.08em)[${docType}]`;
-  const titleEl = `#text(font: (${F.sans}), size: 22pt, weight: "semibold", fill: ${rgb(C.text)}, hyphenate: false, lang: "zh")[${title}]`;
+  // Title: justify disabled so words are not stretched across the full width.
+  const titleEl = (
+    `#block(width: 100%)[\n` +
+    `  #set par(justify: false)\n` +
+    `  #text(font: (${F.sans}), size: 22pt, weight: "semibold", fill: ${rgb(C.text)}, hyphenate: false, lang: "zh")[${title}]\n` +
+    `]`
+  );
 
   const idParts: string[] = [];
   if (docId)   idParts.push(`#text(weight: "bold")[${docId}]`);
