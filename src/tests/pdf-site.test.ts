@@ -85,14 +85,27 @@ test("renderActions still includes Print button", () => {
   assert.ok(html.includes(">Print<"), "Print button label must remain 'Print'");
 });
 
-// ── 7. PDF link uses relative path /pdf/{DOC_ID}.pdf ─────────────────────────
+// ── 7. PDF link uses relative path — no absolute /pdf/ prefix ────────────────
+//
+// Previously the link was href="/pdf/{DOC_ID}.pdf" (absolute). That path
+// breaks on sub-path GitHub Pages deployments where the site root is
+// e.g. /publisher-energize/. The fix changes to rootRelative + "pdf/..."
+// which resolves to the same URL on root deployments and to the correct
+// sub-path URL on non-root deployments.
 
 test("PDF download link uses relative /pdf/{DOC_ID}.pdf path", () => {
   const docId = "ARCBOS-AGR-2606-0008";
+  // renderActions default rootRelative is "../../" — same as ROOT_RELATIVE_FROM_DOC.
+  // Document pages live at /{namespace}/{token}/index.html so ../../pdf/ resolves
+  // to /pdf/ on root deployments and to /{base}/pdf/ on sub-path deployments.
   const html = renderActions(docId);
   assert.ok(
-    html.includes(`href="/pdf/${docId}.pdf"`),
-    `PDF link must be href="/pdf/${docId}.pdf"`
+    html.includes(`href="../../pdf/${docId}.pdf"`),
+    `PDF link must be href="../../pdf/${docId}.pdf" (relative, not absolute)`
+  );
+  assert.ok(
+    !html.includes(`href="/pdf/`),
+    "PDF link must not use the old absolute /pdf/ prefix"
   );
 });
 
@@ -167,7 +180,6 @@ test("preview-publish.yml pdf:site step references PDF_REQUIRED env var", async 
     src.includes("PDF_REQUIRED"),
     "preview-publish.yml must reference PDF_REQUIRED so PDF_REQUIRED=true blocks on failure"
   );
-  // continue-on-error must be conditioned on PDF_REQUIRED so setting it to true inverts the behaviour
   const pdfSiteIdx = src.indexOf("pdf:site");
   const continueIdx = src.lastIndexOf("continue-on-error:", pdfSiteIdx);
   const pdfReqInExpr = src.slice(continueIdx, continueIdx + 120);
@@ -181,7 +193,6 @@ test("preview-publish.yml pdf:site step references PDF_REQUIRED env var", async 
 
 test("render-blocks.ts is not modified (content rendering unchanged)", async () => {
   const src = await fs.readFile(path.resolve("src/render/render-blocks.ts"), "utf8");
-  // Confirm render-blocks.ts has no PDF-related additions
   assert.ok(
     !src.includes("pdf") && !src.includes("PDF"),
     "render-blocks.ts must not contain any PDF references — content rendering is unchanged"
@@ -239,7 +250,6 @@ test(".document-content > * must not restrict prose to var(--document-measure)",
       ".document-content > * must not restrict prose to var(--document-measure) — all content must span the full paper content width"
     );
   }
-  // If the selector is absent, the narrow-measure constraint was fully removed — test passes.
 });
 
 // ── 19. TOC must not be constrained to --document-measure ────────────────────
