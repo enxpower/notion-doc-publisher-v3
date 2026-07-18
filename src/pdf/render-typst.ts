@@ -1,46 +1,23 @@
 /**
  * Typst PDF renderer — sidecar PDF publisher.
  *
- * Visual benchmark: production HTML publisher (render-html.ts + render-blocks.ts).
- * Colors, spacing, and component rules are derived directly from:
- *   styles/screen.css   — palette, component rules (pre, table, callout, quote)
- *   styles/print.css    — print-specific sizes (masthead, heading, body text, table)
- *   templates/enterprise.html — document structure order
+ * Table column widths use absolute inch values (not fr units) to prevent
+ * Typst from expanding columns based on header cell content width.
+ * When fr units are used, Typst enforces a minimum column width equal to
+ * the widest non-wrappable word in the header, which causes narrow columns
+ * to steal space from wider ones and produces the "collapsed Activity column"
+ * symptom seen in CA-PEP01 (the header text "Source (Proposal Ref.)" is
+ * wider than 15fr would normally allow, forcing col1 to shrink to almost 0).
  *
- * Key visual decisions:
- *   Colors      — CSS custom-property values (--text, --muted, --accent, --line, --soft)
- *   Code blocks — thin all-around border, #f6f7f8 bg; NO left bar  (screen.css pre)
- *   Tables      — neutral top rule; transparent th bg; uppercase muted th text; rows border-bottom only
- *   H1 border   — placed ABOVE the heading to match print.css h2 { border-top }
- *   Masthead    — compact 9pt/6.8pt, 1pt near-black rule  (print.css masthead-brand/slogan)
- *   Line height — 0.85em leading ≈ 1.85× for CJK contract prose
- *   Quote       — 1pt muted left border  (print.css border-left: 0.4mm solid #555)
- *   Callout     — --soft bg + 3pt accent left border  (screen.css .callout)
- *   lang: "zh"  — enables CJK line-break:strict equivalent
+ * Absolute inch values are computed from the US Letter text area width
+ * (8.5in - 2×0.8in = 6.9in) and the same proportional ratios, so the
+ * visual result is identical to the intended fr layout but immune to
+ * minimum-content-width expansion.
  *
- * PDF-specific (no HTML equivalent):
- *   Running page header + footer  (BRAND / DOC_ID · page X of Y)
- *   Signature page: #pagebreak() before 签署页 heading + structured party/field blocks
- *   Divider spacing made weak so heading space always wins
- *   Table column widths: proportional fr units by column count — prevents CJK one-char-per-line
- *     wrapping that occurs with 'auto' columns that compress below readable width.
- *     2-col: 28/72  |  3-col: 20/30/50  |  4-col: 25/15/35/25
- *     5-col: 8/8/18/34/32 (payment/milestone tables)  |  6+ col: equal 1fr
- *   Table header: table.header() repeats the header row on every page the table spans.
- *
- * Font stacks:
- *   The CI environment (ubuntu-latest + fonts-liberation + fonts-noto-cjk) does NOT
- *   have Times New Roman, Arial, or Courier New. Typst silently falls back to an
- *   inappropriate monospace font when requested fonts are missing, which produces the
- *   “collapsed table / ugly font” symptom.
- *
- *   fonts-liberation provides metric-compatible substitutes:
- *     Liberation Serif  → drop-in for Times New Roman
- *     Liberation Sans   → drop-in for Arial
- *     Liberation Mono   → drop-in for Courier New
- *
- *   Font stacks list Liberation first (always available in CI), then the Windows/Mac
- *   originals (available on developer machines), then Noto CJK for Chinese glyphs.
+ * Font stacks: Liberation fonts are listed first because the CI environment
+ * (ubuntu-latest + fonts-liberation + fonts-noto-cjk) does not have
+ * Times New Roman, Arial, or Courier New. Liberation fonts are
+ * metric-compatible substitutes that ship with fonts-liberation.
  */
 
 import type {
@@ -50,7 +27,7 @@ import type {
 } from "../model/document.js";
 import type { BrandInfo } from "./types.js";
 
-// ── Palette — aligned 1:1 to CSS custom properties ───────────────────────────
+// ── Palette ───────────────────────────────────────────────────────────────────
 const C = {
   text:       "1a1c20",
   muted:      "6a717b",
@@ -63,11 +40,7 @@ const C = {
   codeText:   "1d232b",
 };
 
-// ── Font stacks ──────────────────────────────────────────────────────────────────
-// Liberation fonts ship with fonts-liberation (installed in CI workflow).
-// They are metric-compatible substitutes for Times New Roman / Arial / Courier New.
-// List them FIRST so CI always gets the correct font; Windows/Mac originals listed
-// second as fallback for local dev; Noto CJK last for Chinese character support.
+// ── Font stacks ───────────────────────────────────────────────────────────────
 const F = {
   serif: `"Liberation Serif", "Times New Roman", "Noto Serif CJK SC"`,
   sans:  `"Liberation Sans",  "Arial",           "Noto Sans CJK SC"`,
@@ -103,22 +76,35 @@ function escContent(s: string): string {
     .replace(/~/g, "\\~");
 }
 
-// ── Table column width strategy ────────────────────────────────────────────────
-// Use proportional fr units for all columns so the table spans the full content
-// width and no column is compressed below a readable line width.
+// ── Table column width strategy ───────────────────────────────────────────────
 //
-// Ratios chosen empirically for common table structures:
-//   2-col  28/72       — label + content
-//   3-col  20/30/50    — mixed label / description
-//   4-col  25/15/35/25 — activity / source / description / responsibility
-//   5-col  8/8/18/34/32— payment milestone
-//   6+ col equal 1fr each
+// MUST use absolute inch values, NOT fr units.
+//
+// Root cause of the "collapsed column" bug:
+//   Typst fr units distribute free space AFTER satisfying each column's
+//   minimum content width. If a header cell contains a long non-breaking
+//   phrase (e.g. "Source (Proposal Ref.)"), Typst widens that column to
+//   fit the phrase before distributing the remaining space by fr ratio.
+//   This silently shrinks all other columns, making the Activity column
+//   collapse to near-zero width.
+//
+// Absolute inch values bypass minimum-content-width calculation entirely:
+//   the column is exactly the specified width regardless of cell content,
+//   and text wraps within that fixed width.
+//
+// Text area width: 8.5in - 2×0.8in margin = 6.9in
+// Ratios and resulting absolute widths:
+//   2-col  28/72        → 1.93in, 4.97in   (label + content)
+//   3-col  20/30/50     → 1.38in, 2.07in, 3.45in
+//   4-col  25/15/35/25  → 1.73in, 1.04in, 2.42in, 1.73in  (activity/source/desc/resp)
+//   5-col  8/8/18/34/32 → 0.55in, 0.55in, 1.24in, 2.35in, 2.21in  (payment milestone)
+//   6+col  equal 1fr each (too many columns to assign semantic widths)
 function tableColumns(colCount: number): string {
   if (colCount <= 1) return "1fr";
-  if (colCount === 2) return "28fr, 72fr";
-  if (colCount === 3) return "20fr, 30fr, 50fr";
-  if (colCount === 4) return "25fr, 15fr, 35fr, 25fr";
-  if (colCount === 5) return "8fr, 8fr, 18fr, 34fr, 32fr";
+  if (colCount === 2) return "1.93in, 4.97in";
+  if (colCount === 3) return "1.38in, 2.07in, 3.45in";
+  if (colCount === 4) return "1.73in, 1.04in, 2.42in, 1.73in";
+  if (colCount === 5) return "0.55in, 0.55in, 1.24in, 2.35in, 2.21in";
   return Array(colCount).fill("1fr").join(", ");
 }
 
@@ -385,7 +371,6 @@ function renderPreamble(
 )
 
 // ── Base typography ───────────────────────────────────────────────────────────
-// lang: "zh" enables CJK line-break:strict — no mid-word breaks in Chinese.
 #set text(font: (${F.serif}), size: 11pt, fill: ${rgb(C.text)}, lang: "zh")
 #set par(leading: 0.85em, spacing: 14pt, justify: true, first-line-indent: 0pt)
 
@@ -401,7 +386,6 @@ function renderPreamble(
 )]
 
 // ── Heading show rules ────────────────────────────────────────────────────────
-// bookmarked: true adds PDF navigation bookmarks for each heading.
 #set heading(bookmarked: true)
 #show heading.where(level: 1): it => {
   v(26pt, weak: true)
@@ -432,7 +416,6 @@ function renderPreamble(
 }
 
 // ── Code show rules ───────────────────────────────────────────────────────────
-// Inline and block code: uniform border, light neutral bg, NO left bar.
 #show raw.where(block: false): it => box(
   fill: ${rgb(C.codeBg)},
   stroke: 0.5pt + ${rgb(C.line)},
