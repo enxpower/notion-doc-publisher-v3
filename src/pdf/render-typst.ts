@@ -26,9 +26,21 @@
  *     wrapping that occurs with 'auto' columns that compress below readable width.
  *     2-col: 28/72  |  3-col: 20/30/50  |  4-col: 25/15/35/25
  *     5-col: 8/8/18/34/32 (payment/milestone tables)  |  6+ col: equal 1fr
- *     Note: 4-col uses 25/15/35/25 (not the historical 15/20/33/32) to give the
- *     Activity/Description column adequate width in English technical memos.
  *   Table header: table.header() repeats the header row on every page the table spans.
+ *
+ * Font stacks:
+ *   The CI environment (ubuntu-latest + fonts-liberation + fonts-noto-cjk) does NOT
+ *   have Times New Roman, Arial, or Courier New. Typst silently falls back to an
+ *   inappropriate monospace font when requested fonts are missing, which produces the
+ *   “collapsed table / ugly font” symptom.
+ *
+ *   fonts-liberation provides metric-compatible substitutes:
+ *     Liberation Serif  → drop-in for Times New Roman
+ *     Liberation Sans   → drop-in for Arial
+ *     Liberation Mono   → drop-in for Courier New
+ *
+ *   Font stacks list Liberation first (always available in CI), then the Windows/Mac
+ *   originals (available on developer machines), then Noto CJK for Chinese glyphs.
  */
 
 import type {
@@ -51,11 +63,15 @@ const C = {
   codeText:   "1d232b",
 };
 
-// ── Font stacks — Latin first, then system CJK fallbacks ─────────────────────
+// ── Font stacks ──────────────────────────────────────────────────────────────────
+// Liberation fonts ship with fonts-liberation (installed in CI workflow).
+// They are metric-compatible substitutes for Times New Roman / Arial / Courier New.
+// List them FIRST so CI always gets the correct font; Windows/Mac originals listed
+// second as fallback for local dev; Noto CJK last for Chinese character support.
 const F = {
-  serif: `"Times New Roman", "Noto Serif CJK SC"`,
-  sans:  `"Arial", "Noto Sans CJK SC"`,
-  mono:  `"Courier New", "Noto Sans Mono CJK SC"`,
+  serif: `"Liberation Serif", "Times New Roman", "Noto Serif CJK SC"`,
+  sans:  `"Liberation Sans",  "Arial",           "Noto Sans CJK SC"`,
+  mono:  `"Liberation Mono",  "Courier New",     "Noto Sans Mono CJK SC"`,
 };
 
 // ── Low-level helpers ─────────────────────────────────────────────────────────
@@ -91,15 +107,11 @@ function escContent(s: string): string {
 // Use proportional fr units for all columns so the table spans the full content
 // width and no column is compressed below a readable line width.
 //
-// 'auto' columns shrink to content and cause Chinese text to wrap one character
-// per line when a table has many columns. fr units distribute the full width
-// in fixed ratios, keeping every column readable.
-//
 // Ratios chosen empirically for common table structures:
 //   2-col  28/72       — label + content
 //   3-col  20/30/50    — mixed label / description
 //   4-col  25/15/35/25 — activity / source / description / responsibility
-//   5-col  8/8/18/34/32— payment milestone (节点/比例/节点名称/最低验收目标/付款触发依据)
+//   5-col  8/8/18/34/32— payment milestone
 //   6+ col equal 1fr each
 function tableColumns(colCount: number): string {
   if (colCount <= 1) return "1fr";
