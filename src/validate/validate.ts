@@ -79,6 +79,22 @@ export function validateDocuments(documents: DocumentModel[], config: AppConfig)
       );
     }
 
+    // Brand filter warning: emitted when a brand whitelist is active and this
+    // document's brand is not in it. Recorded before isPublishableCandidate so
+    // it appears in the validation report even though the document is excluded.
+    if (
+      config.allowedBrands !== null &&
+      !config.allowedBrands.has(document.meta.brand.label.trim().toUpperCase())
+    ) {
+      warnings.push(
+        issue(
+          "BRAND_NOT_ALLOWED",
+          `Brand "${document.meta.brand.label || "(empty)"}" is not in the ALLOWED_BRANDS list for this deployment target; document will be skipped.`,
+          document
+        )
+      );
+    }
+
     const v = normalizeVisibility(document.meta.visibility);
     if (isPrivateLinkVisibility(document.meta.visibility)) {
       if (!document.meta.shareToken) {
@@ -197,11 +213,33 @@ export function validateDocuments(documents: DocumentModel[], config: AppConfig)
   return documents;
 }
 
+/**
+ * Returns true when a document should be included in the build output.
+ *
+ * Gate order:
+ *   1. Publish checkbox + publishable Status  (always required)
+ *   2. Brand filter — when ALLOWED_BRANDS is set, the document's Brand label
+ *      (normalised to UPPERCASE) must appear in the whitelist. Fail-closed:
+ *      an empty Brand label is excluded when a whitelist is active.
+ *   3. Visibility — private-link documents bypass allowedVisibility;
+ *      public documents must match it.
+ */
 export function isPublishableCandidate(document: DocumentModel, config: AppConfig): boolean {
   if (!document.meta.publish || !config.publishableStatuses.has(document.meta.status)) {
     return false;
   }
-  // Private-link documents (Client, Internal, Unlisted) always generate pages regardless of allowedVisibility
+
+  // Brand filter: null means no filter (default — all brands pass).
+  // When a whitelist is configured, an empty brand label also fails.
+  if (
+    config.allowedBrands !== null &&
+    !config.allowedBrands.has(document.meta.brand.label.trim().toUpperCase())
+  ) {
+    return false;
+  }
+
+  // Private-link documents (Client, Internal, Unlisted) always generate pages
+  // regardless of allowedVisibility.
   if (isPrivateLinkVisibility(document.meta.visibility)) {
     return true;
   }

@@ -4,6 +4,7 @@
  * These tests protect the rules that must never silently change:
  *   - DOC_ID parsing, assignment sequencing, and collision refusal
  *   - publishability (Publish + Status + Visibility) decisions
+ *   - brand filter (ALLOWED_BRANDS) behaviour
  *   - public index listing (Public + Portal Listed only)
  *   - Share Token validation severity
  *   - security configuration lint combinations
@@ -24,6 +25,7 @@ function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
   return {
     publishableStatuses: new Set(["Approved", "Published"]),
     allowedVisibility: new Set(["Public"]),
+    allowedBrands: null,
     docIdYearMonth: "2606",
     autoGenerateShareToken: true,
     allowMissingShareToken: false,
@@ -117,6 +119,95 @@ test("public index lists ONLY Public + Portal Listed documents", () => {
   assert.equal(isPublicIndexListed(makeDoc({ portalListed: false })), false);
   assert.equal(isPublicIndexListed(makeDoc({ visibility: "Client" })), false);
   assert.equal(isPublicIndexListed(makeDoc({ visibility: "Unlisted", portalListed: true })), false);
+});
+
+/* ---------------- Brand filter (ALLOWED_BRANDS) ---------------- */
+
+test("allowedBrands=null passes all brands — zero production impact on existing deployments", () => {
+  const config = makeConfig({ allowedBrands: null });
+  assert.equal(isPublishableCandidate(makeDoc({ brand: { label: "ARCBOS", token: "ARCBOS", slug: "arcbos" } }), config), true);
+  assert.equal(isPublishableCandidate(makeDoc({ brand: { label: "ENERGIZE", token: "ENERGIZE", slug: "energize" } }), config), true);
+  assert.equal(isPublishableCandidate(makeDoc({ brand: { label: "AGIM", token: "AGIM", slug: "agim" } }), config), true);
+});
+
+test("allowedBrands whitelist passes matching brand and excludes others", () => {
+  const config = makeConfig({ allowedBrands: new Set(["ENERGIZE"]) });
+  assert.equal(
+    isPublishableCandidate(makeDoc({ brand: { label: "ENERGIZE", token: "ENERGIZE", slug: "energize" } }), config),
+    true,
+    "ENERGIZE should pass"
+  );
+  assert.equal(
+    isPublishableCandidate(makeDoc({ brand: { label: "ARCBOS", token: "ARCBOS", slug: "arcbos" } }), config),
+    false,
+    "ARCBOS should be excluded"
+  );
+  assert.equal(
+    isPublishableCandidate(makeDoc({ brand: { label: "AGIM", token: "AGIM", slug: "agim" } }), config),
+    false,
+    "AGIM should be excluded"
+  );
+});
+
+test("allowedBrands is case-insensitive: Energize / energize / ENERGIZE all pass", () => {
+  const config = makeConfig({ allowedBrands: new Set(["ENERGIZE"]) });
+  for (const label of ["ENERGIZE", "Energize", "energize", " energize "] as string[]) {
+    assert.equal(
+      isPublishableCandidate(makeDoc({ brand: { label, token: "ENERGIZE", slug: "energize" } }), config),
+      true,
+      `label "${label}" should pass`
+    );
+  }
+});
+
+test("allowedBrands fail-closed: empty brand label is excluded when whitelist is active", () => {
+  const config = makeConfig({ allowedBrands: new Set(["ENERGIZE"]) });
+  assert.equal(
+    isPublishableCandidate(makeDoc({ brand: { label: "", token: "", slug: "" } }), config),
+    false,
+    "empty brand must be excluded when whitelist is active"
+  );
+});
+
+test("allowedBrands: BRAND_NOT_ALLOWED warning appears in validation report for excluded documents", () => {
+  const config = makeConfig({ allowedBrands: new Set(["ENERGIZE"]) });
+  const arcbosDoc = makeDoc({ brand: { label: "ARCBOS", token: "ARCBOS", slug: "arcbos" } }, "page-arcbos");
+  const energizeDoc = makeDoc(
+    { docId: "ENERGIZE-SPEC-2606-0001", brand: { label: "ENERGIZE", token: "ENERGIZE", slug: "energize" }, canonicalPath: "/docs/energize-spec-2606-0001/" },
+    "page-energize"
+  );
+  validateDocuments([arcbosDoc, energizeDoc], config);
+  // ARCBOS doc is excluded — must carry the BRAND_NOT_ALLOWED warning
+  assert.ok(
+    arcbosDoc.validation.warnings.some((w) => w.code === "BRAND_NOT_ALLOWED"),
+    "excluded document must have BRAND_NOT_ALLOWED warning"
+  );
+  // ENERGIZE doc is included — must NOT carry the warning
+  assert.equal(
+    energizeDoc.validation.warnings.filter((w) => w.code === "BRAND_NOT_ALLOWED").length,
+    0,
+    "included document must not have BRAND_NOT_ALLOWED warning"
+  );
+  // Only ENERGIZE doc appears in publishable output
+  const published = publishableDocuments([arcbosDoc, energizeDoc], config);
+  assert.equal(published.length, 1);
+  assert.equal(published[0]!.source.notionPageId, "page-energize");
+});
+
+test("allowedBrands: multiple brands in whitelist all pass", () => {
+  const config = makeConfig({ allowedBrands: new Set(["ENERGIZE", "AGIM"]) });
+  assert.equal(
+    isPublishableCandidate(makeDoc({ brand: { label: "ENERGIZE", token: "ENERGIZE", slug: "energize" } }), config),
+    true
+  );
+  assert.equal(
+    isPublishableCandidate(makeDoc({ brand: { label: "AGIM", token: "AGIM", slug: "agim" } }), config),
+    true
+  );
+  assert.equal(
+    isPublishableCandidate(makeDoc({ brand: { label: "ARCBOS", token: "ARCBOS", slug: "arcbos" } }), config),
+    false
+  );
 });
 
 /* ---------------- Validation rules ---------------- */

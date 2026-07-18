@@ -14,6 +14,12 @@ export type AppConfig = {
   docIdYearMonth: string;
   allowedVisibility: Set<string>;
   publishableStatuses: Set<string>;
+  /**
+   * When non-null, only documents whose Brand label (uppercased) appears
+   * in this set will be built and published. null means no brand filter
+   * (all existing deployments that do not set ALLOWED_BRANDS).
+   */
+  allowedBrands: Set<string> | null;
   brandTokens: Record<string, string>;
   documentTypeTokens: Record<string, string>;
   brandProfiles: Record<string, BrandProfile>;
@@ -51,6 +57,7 @@ export function loadConfig(): AppConfig {
     docIdYearMonth: readYearMonth(),
     allowedVisibility: new Set(readListEnv("ALLOWED_VISIBILITY", "Public")),
     publishableStatuses: new Set(readRequiredListEnv("PUBLISHABLE_STATUSES")),
+    allowedBrands: readOptionalBrandSet("ALLOWED_BRANDS"),
     brandTokens: readRequiredJsonMap("BRAND_TOKENS_JSON"),
     documentTypeTokens: readRequiredJsonMap("DOCUMENT_TYPE_TOKENS_JSON"),
     brandProfiles: readBrandProfiles(),
@@ -63,6 +70,23 @@ export function loadConfig(): AppConfig {
     autoFillPortalCategory: process.env.AUTO_FILL_PORTAL_CATEGORY !== "false",
     legacyPrivateDocIdUrls: process.env.LEGACY_PRIVATE_DOC_ID_URLS === "true"
   };
+}
+
+/**
+ * Reads ALLOWED_BRANDS and returns a normalised uppercase Set, or null when
+ * the variable is absent / empty (meaning: no brand filter, build everything).
+ *
+ * Normalisation: each token is trimmed and uppercased so that
+ *   ENERGIZE / Energize / energize / " ENERGIZE " all resolve identically.
+ */
+function readOptionalBrandSet(name: string): Set<string> | null {
+  const raw = cleanOptional(process.env[name]);
+  if (!raw) return null;
+  const tokens = raw
+    .split(",")
+    .map((t) => t.trim().toUpperCase())
+    .filter(Boolean);
+  return tokens.length > 0 ? new Set(tokens) : null;
 }
 
 /**
