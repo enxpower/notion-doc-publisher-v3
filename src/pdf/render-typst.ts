@@ -22,12 +22,11 @@
  *   Running page header + footer  (BRAND / DOC_ID · page X of Y)
  *   Signature page: #pagebreak() before 签署页 heading + structured party/field blocks
  *   Divider spacing made weak so heading space always wins
- *   Table column widths: content-aware proportional fr units by column count.
+ *   Table column widths: content-aware proportional fr units.
  *     Column widths are computed from actual cell content lengths so wide-content
- *     columns receive more space and narrow columns are not over-allocated.
- *     Hard-coded minimum fr units prevent any column from being too narrow for
- *     readable CJK text. 5-column payment/milestone tables keep their fixed
- *     8/8/18/34/32 ratio which is tuned for that specific structure.
+ *     columns receive more space. A hard minimum of MIN_FR (10fr) prevents any
+ *     column from becoming a hairline regardless of content imbalance.
+ *     5-column payment/milestone tables keep their fixed 8/8/18/34/32 ratio.
  *   Table header: table.header() repeats the header row on every page the table spans.
  */
 
@@ -88,26 +87,25 @@ function escContent(s: string): string {
 }
 
 // ── Table column width strategy ────────────────────────────────────────────────
+//
 // Use proportional fr units so the table spans the full content width and no
 // column is compressed below a readable line width.
 //
-// Column widths are derived from the actual text content of each column:
-//   1. Measure the total character length of every cell in each column.
-//   2. Compute each column's share of the total character count.
-//   3. Clamp each share to a minimum of MIN_FR_PCT so thin columns (e.g.
-//      a column of checkmarks or short codes) still get enough room to
-//      display on one or two lines rather than compressing to a hairline.
-//   4. Re-normalise so all fr values sum to 100 and emit as "Xfr, Yfr, ...".
+// Algorithm:
+//   1. Sum character lengths of all cells in each column.
+//   2. Distribute 100 "points" proportionally to character counts.
+//   3. Apply a hard floor of MIN_FR per column — if any column would fall
+//      below this, steal the deficit from the widest column(s) until all
+//      columns are at or above the floor. This guarantees the floor survives
+//      even in extreme imbalance (e.g. 1 char vs 999 chars).
+//   4. Emit as integer fr values.
 //
-// Special case — 5-col payment/milestone tables: the fixed 8/8/18/34/32
-// ratio is preserved because those tables have a well-known semantic layout
-// (节点 | 比例 | 节点名称 | 最低验收目标 | 付款触发依据) and the content-
-// aware heuristic tends to over-weight the description columns.
-//
-// 2-col tables also keep the 28/72 label-content split which is almost always
-// the right ratio and which existing tests verify.
+// Special cases (fixed ratios):
+//   2-col  — 28/72  label-content split
+//   5-col  — 8/8/18/34/32  payment-milestone semantic layout
+//   6+ col — equal 1fr each
 
-const MIN_FR_PCT = 10; // minimum share (%) any column gets — prevents hairline columns
+export const MIN_FR = 10; // hard minimum fr any column receives
 
 export function tableColumns(
   colCount: number,
@@ -120,7 +118,7 @@ export function tableColumns(
     return Array(colCount).fill("1fr").join(", ");
   }
 
-  // Compute total character length per column across all rows
+  // Step 1: measure content length per column
   const colLengths = Array(colCount).fill(0) as number[];
   for (const row of rows) {
     for (let c = 0; c < colCount; c++) {
@@ -131,20 +129,44 @@ export function tableColumns(
 
   const totalChars = colLengths.reduce((a, b) => a + b, 0);
   if (totalChars === 0) {
-    // Fallback: equal distribution
     return Array(colCount).fill("1fr").join(", ");
   }
 
-  // Raw percentage share per column, clamped to MIN_FR_PCT
-  const rawPct = colLengths.map((len) => Math.max(MIN_FR_PCT, (len / totalChars) * 100));
+  // Step 2: initial proportional allocation (floats, sum = 100)
+  const frFloat = colLengths.map((len) => (len / totalChars) * 100);
 
-  // Re-normalise to 100 and round to integers
-  const rawSum = rawPct.reduce((a, b) => a + b, 0);
-  const frValues = rawPct.map((p) => Math.round((p / rawSum) * 100));
+  // Step 3: enforce hard floor by stealing from the widest column(s)
+  // Iterate until stable (at most colCount passes).
+  for (let pass = 0; pass < colCount; pass++) {
+    const deficits = frFloat.map((v) => Math.max(0, MIN_FR - v));
+    const totalDeficit = deficits.reduce((a, b) => a + b, 0);
+    if (totalDeficit < 0.001) break; // all columns at or above floor
 
-  // Fix rounding drift on the last column
+    // Apply the floor to columns that need it
+    for (let c = 0; c < colCount; c++) {
+      if (deficits[c]! > 0) frFloat[c] = MIN_FR;
+    }
+
+    // Steal deficit from the columns above the floor, proportionally
+    const above = frFloat
+      .map((v, i) => (deficits[i]! === 0 ? v : 0));
+    const aboveSum = above.reduce((a, b) => a + b, 0);
+    if (aboveSum <= 0) break; // all columns at floor — nothing to steal
+
+    const scale = (aboveSum - totalDeficit) / aboveSum;
+    for (let c = 0; c < colCount; c++) {
+      if (deficits[c]! === 0) frFloat[c] = above[c]! * scale;
+    }
+  }
+
+  // Step 4: round to integers, fix drift on the widest column
+  const frValues = frFloat.map((v) => Math.max(MIN_FR, Math.round(v)));
   const frSum = frValues.reduce((a, b) => a + b, 0);
-  frValues[frValues.length - 1] += 100 - frSum;
+  // Adjust the largest column to absorb rounding drift
+  const maxIdx = frValues.indexOf(Math.max(...frValues));
+  frValues[maxIdx] += 100 - frSum;
+  // Safety: clamp again in case drift pushed the max below MIN_FR
+  frValues[maxIdx] = Math.max(MIN_FR, frValues[maxIdx]!);
 
   return frValues.map((v) => `${v}fr`).join(", ");
 }
