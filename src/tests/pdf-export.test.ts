@@ -7,6 +7,7 @@
  *   - Typst source correctness (no TOC, running footer, heading/table/code style)
  *   - Signature page detection
  *   - DOC_ID filtering and error handling
+ *   - Table column widths: absolute inch values (not fr) for 2–5 col
  *
  * All tests run in memory — no Notion access, no file output.
  */
@@ -226,9 +227,11 @@ test(".typ file is written before Typst binary is checked", async () => {
   );
 });
 
-// ── 13. 5-column table uses payment-style proportional fr widths ──────────────
+// ── 13. 5-column table ───────────────────────────────────────────────────────────────
+// 5-column payment/milestone tables use absolute inch values that match the
+// 8/8/18/34/32 proportional ratio against the 6.9in text area.
 
-test("5-column table uses 8fr/8fr/18fr/34fr/32fr payment-milestone column widths", () => {
+test("5-column table uses absolute inch widths (payment-milestone semantic layout)", () => {
   const doc = makeDoc([
     {
       type: "table",
@@ -252,15 +255,25 @@ test("5-column table uses 8fr/8fr/18fr/34fr/32fr payment-milestone column widths
     },
   ]);
   const src = renderDocumentTypst(doc, TEST_BRAND);
+  // 5-col absolute widths: 0.55 + 0.55 + 1.24 + 2.35 + 2.21 = 6.90in
   assert.ok(
-    src.includes("8fr, 8fr, 18fr, 34fr, 32fr"),
-    "5-column table must use payment milestone column ratios (8/8/18/34/32)"
+    src.includes("0.55in, 0.55in, 1.24in, 2.35in, 2.21in"),
+    "5-column table must use absolute inch widths (0.55/0.55/1.24/2.35/2.21)"
+  );
+  // Must not use auto — auto causes CJK text to wrap one character per line
+  const tableStart = src.indexOf("#table(");
+  const columnsLine = src.indexOf("columns:", tableStart);
+  const columnsEnd = src.indexOf("\n", columnsLine);
+  assert.ok(
+    !src.slice(columnsLine, columnsEnd).includes("auto"),
+    "5-column table must not use auto columns"
   );
 });
 
-// ── 14. 2-column table uses 28fr/72fr proportional widths ─────────────────────
+// ── 14. 2-column table ───────────────────────────────────────────────────────────────
+// 2-col: 1.93in + 4.97in = 6.90in  (28/72 proportion)
 
-test("2-column table uses 28fr/72fr proportional column widths", () => {
+test("2-column table uses absolute inch column widths (1.93in + 4.97in = 6.90in)", () => {
   const doc = makeDoc([
     {
       type: "table",
@@ -273,17 +286,22 @@ test("2-column table uses 28fr/72fr proportional column widths", () => {
   ]);
   const src = renderDocumentTypst(doc, TEST_BRAND);
   assert.ok(
-    src.includes("28fr, 72fr"),
-    "2-column table must use 28/72 fr proportions"
+    src.includes("1.93in, 4.97in"),
+    "2-column table must use absolute inch widths (1.93in, 4.97in)"
   );
 });
 
-// ── 15. 3-column and 4-column tables use fr widths (not auto) ─────────────────
+// ── 15. 3-column and 4-column tables ───────────────────────────────────────────────
+// All column specs are absolute inch values so Typst cannot expand a column
+// to fit a long header label (e.g. "Source (Proposal Ref.)") at the cost of
+// collapsing adjacent columns.
+//   3-col: 1.38 + 2.07 + 3.45 = 6.90in
+//   4-col: 2.20 + 0.80 + 2.50 + 1.40 = 6.90in
 
-test("3-column and 4-column tables use fr units — no auto columns", () => {
+test("3-column and 4-column tables use absolute inch column widths", () => {
   for (const [colCount, expectedFrag] of [
-    [3, "20fr, 30fr, 50fr"],
-    [4, "25fr, 15fr, 35fr, 25fr"],
+    [3, "1.38in, 2.07in, 3.45in"],
+    [4, "2.20in, 0.80in, 2.50in, 1.40in"],
   ] as [number, string][]) {
     const headers = Array.from({ length: colCount }, (_, i) => [{ text: `H${i + 1}` }]);
     const bodyRow = Array.from({ length: colCount }, (_, i) => [{ text: `R${i + 1}` }]);
@@ -291,15 +309,15 @@ test("3-column and 4-column tables use fr units — no auto columns", () => {
     const src = renderDocumentTypst(doc, TEST_BRAND);
     assert.ok(
       src.includes(expectedFrag),
-      `${colCount}-column table must use fr proportions: ${expectedFrag}`
+      `${colCount}-column table must use absolute inch widths: ${expectedFrag}`
     );
+    // Must not use auto
     const tableStart = src.indexOf("#table(");
     const columnsLine = src.indexOf("columns:", tableStart);
     const columnsEnd = src.indexOf("\n", columnsLine);
-    const columnsDecl = src.slice(columnsLine, columnsEnd);
     assert.ok(
-      !columnsDecl.includes("auto"),
-      `${colCount}-column table columns: line must not use 'auto' — prevents CJK vertical wrapping`
+      !src.slice(columnsLine, columnsEnd).includes("auto"),
+      `${colCount}-column table must not use auto columns`
     );
   }
 });
