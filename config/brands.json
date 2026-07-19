@@ -3,19 +3,19 @@
     "displayName": "ARCBOS",
     "tagline": "ENGINEERED FOR EXTREME CONDITIONS",
     "shareImage": "arcbos-share-preview.png",
-    "favicon": "arcbos-share-preview.png"
+    "favicon": "arcbos-favicon.svg"
   },
   "ENERGIZE": {
     "displayName": "ENERGIZE",
     "tagline": "",
     "shareImage": "energizeos-share-preview.png",
-    "favicon": "energizeos-share-preview.png"
+    "favicon": "energizeos-favicon.svg"
   },
   "AGIM": {
     "displayName": "AGI&M",
     "tagline": "",
     "shareImage": "agim-share-preview.png",
-    "favicon": "agim-share-preview.png"
+    "favicon": "agim-favicon.svg"
   },
   "GONG": {
     "displayName": "GONG",
