@@ -15,10 +15,8 @@ on:
         description: "Type PHASE2-INCREMENTAL-PUBLISH to permit apply mode"
         required: false
         default: ""
-  pull_request:
-    types: [opened, synchronize, reopened]
-    paths:
-      - ".phase2-ops/command.json"
+  issue_comment:
+    types: [created]
 
 permissions:
   contents: read
@@ -29,6 +27,12 @@ concurrency:
 
 jobs:
   publish:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'issue_comment' &&
+       github.event.issue.number == 33 &&
+       github.actor == 'enxpower' &&
+       startsWith(github.event.comment.body, '/phase2-publish PHASE2-INCREMENTAL-PUBLISH '))
     runs-on: ubuntu-latest
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -56,16 +60,14 @@ jobs:
         env:
           DISPATCH_MODE: ${{ inputs.mode }}
           DISPATCH_CONFIRMATION: ${{ inputs.confirm_production }}
-          PR_HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
-          PR_HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
         run: |
           set -euo pipefail
-          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
-            if [ "$PR_HEAD_REPOSITORY" != "$GITHUB_REPOSITORY" ] || [ "$PR_HEAD_BRANCH" != "ops/phase2-seal" ]; then
-              echo "Production PR trigger is restricted to the same-repository ops/phase2-seal branch."
+          if [ "$GITHUB_EVENT_NAME" = "issue_comment" ]; then
+            if ! printf '%s' "$COMMENT_BODY" | grep -Eq '^/phase2-publish PHASE2-INCREMENTAL-PUBLISH [A-Za-z0-9._-]+ [A-Za-z0-9._-]+$'; then
+              echo "Issue command format is invalid."
               exit 1
             fi
-            jq -e '.mode == "apply" and .confirm_production == "PHASE2-INCREMENTAL-PUBLISH"' .phase2-ops/command.json >/dev/null
             mode="apply"
           else
             mode="${DISPATCH_MODE:-dry-run}"
@@ -184,7 +186,10 @@ jobs:
           validate_paths() {
             repo="$1"
             allowed="$2"
-            changed="$(git -C "$repo" status --porcelain=v1 --untracked-files=all | sed -E 's/^.. //' || true)"
+            changed="$({
+              git -C "$repo" diff --name-only --diff-filter=ACDMRTUXB
+              git -C "$repo" ls-files --others --exclude-standard
+            } | sort -u)"
             if [ -z "$changed" ]; then
               return 0
             fi
