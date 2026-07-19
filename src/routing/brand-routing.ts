@@ -10,6 +10,9 @@ export type BrandRoute = {
   outputRoot: string;
   targetRepository: string | null;
   targetDomain: string;
+  pathPrefix?: string;
+  deploymentRoot?: string;
+  pdfPath?: string;
   cname?: string;
   presentationProfileKey?: string | null;
   allowedUrlNamespaces?: string[];
@@ -37,6 +40,8 @@ export type BrandOutputManifest = {
   outputRoot: string;
   targetRepository: string | null;
   targetDomain: string;
+  pathPrefix?: string;
+  deploymentRoot?: string;
   files: string[];
   deletions?: string[];
   existingFileCount?: number;
@@ -49,6 +54,8 @@ export type DryRunDeploymentPlan = {
   sourceDir: string;
   targetRepository: string | null;
   targetDomain: string;
+  pathPrefix: string;
+  deploymentRoot: string;
   expectedFileCount: number;
   deletionCount: number;
   wouldDelete: string[];
@@ -154,6 +161,8 @@ export function createDryRunDeploymentPlan(input: {
       sourceDir: input.sourceDir,
       targetRepository: input.route.targetRepository,
       targetDomain: input.route.targetDomain,
+      pathPrefix: normalizedPathPrefix(input.route),
+      deploymentRoot: normalizedDeploymentRoot(input.route),
       expectedFileCount: 0,
       deletionCount: 0,
       wouldDelete: []
@@ -174,6 +183,14 @@ export function createDryRunDeploymentPlan(input: {
 
   if (normalizeDomain(manifest.targetDomain) !== normalizeDomain(input.route.targetDomain)) {
     errors.push("Manifest target domain does not match route target domain.");
+  }
+
+  if (normalizedPathPrefixFromManifest(manifest) !== normalizedPathPrefix(input.route)) {
+    errors.push("Manifest path prefix does not match route path prefix.");
+  }
+
+  if (normalizedDeploymentRootFromManifest(manifest) !== normalizedDeploymentRoot(input.route)) {
+    errors.push("Manifest deployment root does not match route deployment root.");
   }
 
   const files = Array.isArray(manifest.files) ? manifest.files : [];
@@ -231,6 +248,8 @@ export function createDryRunDeploymentPlan(input: {
     sourceDir: input.sourceDir,
     targetRepository: input.route.targetRepository,
     targetDomain: input.route.targetDomain,
+    pathPrefix: normalizedPathPrefix(input.route),
+    deploymentRoot: normalizedDeploymentRoot(input.route),
     expectedFileCount: files.length,
     deletionCount: deletions.length,
     wouldDelete: errors.length === 0 ? deletions : []
@@ -238,9 +257,15 @@ export function createDryRunDeploymentPlan(input: {
 }
 
 export function computeRouteFinalUrl(route: BrandRoute, canonicalPath: string): string {
-  const base = route.targetDomain.trim().replace(/\/+$/, "");
+  const base = computeRouteBaseUrl(route);
   const pathValue = canonicalPath.startsWith("/") ? canonicalPath : `/${canonicalPath}`;
   return `${base}${pathValue}`;
+}
+
+export function computeRouteBaseUrl(route: BrandRoute): string {
+  const base = route.targetDomain.trim().replace(/\/+$/, "");
+  const prefix = normalizedPathPrefix(route);
+  return `${base}${prefix}`;
 }
 
 export function resolveBrandRoute(routes: BrandRoute[], brandLabel: string): BrandRoute {
@@ -301,6 +326,38 @@ function normalizeOutputRoot(value: string): string {
 
 function normalizeDomain(value: string): string {
   return value.trim().replace(/\/+$/, "").toLowerCase();
+}
+
+function normalizedPathPrefix(route: Pick<BrandRoute, "pathPrefix">): string {
+  const raw = route.pathPrefix?.trim() ?? "";
+  if (!raw || raw === "/") {
+    return "";
+  }
+  return `/${raw.replace(/^\/+|\/+$/g, "")}`;
+}
+
+function normalizedPathPrefixFromManifest(manifest: Pick<BrandOutputManifest, "pathPrefix">): string {
+  const raw = manifest.pathPrefix?.trim() ?? "";
+  if (!raw || raw === "/") {
+    return "";
+  }
+  return `/${raw.replace(/^\/+|\/+$/g, "")}`;
+}
+
+function normalizedDeploymentRoot(route: Pick<BrandRoute, "deploymentRoot">): string {
+  return normalizeDeploymentRootValue(route.deploymentRoot);
+}
+
+function normalizedDeploymentRootFromManifest(manifest: Pick<BrandOutputManifest, "deploymentRoot">): string {
+  return normalizeDeploymentRootValue(manifest.deploymentRoot);
+}
+
+function normalizeDeploymentRootValue(value: string | undefined): string {
+  const raw = value?.trim() ?? "";
+  if (!raw || raw === ".") {
+    return "";
+  }
+  return raw.replace(/^\/+|\/+$/g, "");
 }
 
 function isWithinRoot(candidate: string, root: string): boolean {

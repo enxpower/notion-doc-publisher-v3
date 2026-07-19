@@ -177,12 +177,13 @@ test("valid ARCBOS, ENERGIZE, AGIM, and GONG records build into separate readonl
 
   for (const brand of ["ARCBOS", "ENERGIZE", "AGIM", "GONG"]) {
     const manifest = result.manifests.find((item) => item.brand === brand)!;
+    const expectedOutputRoot = brand === "GONG" ? "GONG/site/gong-docs" : `${brand}/site`;
     assert.equal(manifest.sourceDocumentCount, 1, brand);
     assert.equal(manifest.successfullyBuiltDocumentCount, 1, brand);
-    assert.equal(manifest.outputRoot, `${brand}/site`, brand);
+    assert.equal(manifest.outputRoot, expectedOutputRoot, brand);
     assert.ok(await exists(path.join(outputBaseRoot, manifest.outputRoot, "index.html")), `${brand} readonly output missing`);
   }
-  assert.equal(result.manifests.find((item) => item.brand === "GONG")!.deploymentPlan.ok, false);
+  assert.equal(result.manifests.find((item) => item.brand === "GONG")!.deploymentPlan.ok, true);
 });
 
 test("readonly routed build renders same-brand PDFs and records integrity in public manifests", async () => {
@@ -242,7 +243,7 @@ test("readonly PDF renderer receives accepted per-brand documents without reload
   assert.deepEqual(rendered.filter((item) => item.brand === "ARCBOS").map((item) => item.profile), ["ARCBOS", "ARCBOS"]);
   assert.equal(rendered.find((item) => item.brand === "ENERGIZE")!.profile, "ENERGIZE");
   assert.equal(rendered.find((item) => item.brand === "AGIM")!.profile, "AGIM");
-  assert.equal(rendered.find((item) => item.brand === "GONG")!.profile, null);
+  assert.equal(rendered.find((item) => item.brand === "GONG")!.profile, "GONG");
 });
 
 test("PDF render failure blocks only the affected readonly brand", async () => {
@@ -319,15 +320,18 @@ test("unsupported routed PDF presentation profile blocks only that brand", async
   assert.equal(arcbos.buildStatus, "success");
 });
 
-test("GONG routed PDFs remain local with no confirmed presentation profile or deployment target", async () => {
+test("GONG routed PDFs use the confirmed presentation profile and gong-docs deployment boundary", async () => {
   const { result } = await buildReadonlyFixture();
   const gong = result.manifests.find((manifest) => manifest.brand === "GONG")!;
 
-  assert.equal(gong.presentationProfileKey, null);
-  assert.equal(gong.pdfResults[0]!.presentationProfileKey, null);
+  assert.equal(gong.outputRoot, "GONG/site/gong-docs");
+  assert.equal(gong.pathPrefix, "/gong-docs");
+  assert.equal(gong.deploymentRoot, "gong-docs");
+  assert.equal(gong.presentationProfileKey, "GONG");
+  assert.equal(gong.pdfResults[0]!.presentationProfileKey, "GONG");
   assert.equal(gong.successfulPdfCount, 1);
-  assert.equal(gong.deploymentPlan.ok, false);
-  assert.ok(gong.deploymentPlan.errors.some((error) => error.includes("No confirmed GONG target repository")));
+  assert.equal(gong.deploymentPlan.ok, true);
+  assert.equal(gong.documents[0]!.finalUrl, "[redacted-private-url]");
 });
 
 test("readonly records missing DOC_ID are rejected and never assigned", async () => {

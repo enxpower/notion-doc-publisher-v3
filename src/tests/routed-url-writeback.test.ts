@@ -102,15 +102,15 @@ test("cross-brand routed URL mismatch is rejected before writeback", async () =>
   assert.equal(bundle.plan.invalidCount, 1);
 });
 
-test("unsupported GONG route is blocked and empty AGIM is a no-op", async () => {
+test("GONG route uses the enxpower gong-docs URL while empty AGIM is a no-op", async () => {
   const documents = routedDryRunDocuments().filter((document) => document.meta.brand.label !== "AGIM");
   const { bundle } = await buildWritebackFixture({ documents });
-  const gong = bundle.plan.records.find((record) => record.brand === "GONG")!;
+  const gong = bundle.privateRecords.find((record) => record.brand === "GONG")!;
 
   assert.equal(bundle.plan.eligibleByBrand.AGIM, 0);
   assert.equal(bundle.privateRecords.some((record) => record.brand === "AGIM" && record.action === "update"), false);
-  assert.equal(gong.action, "skipped");
-  assert.equal(gong.reason, "DEPLOYMENT_NOT_VALID");
+  assert.equal(gong.action, "update");
+  assert.equal(gong.targetPublishedUrl, "https://enxpower.com/gong-docs/internal/gonginternal01/");
 });
 
 test("rejected and collision-affected records are skipped", async () => {

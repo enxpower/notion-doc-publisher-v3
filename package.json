@@ -10,6 +10,7 @@
     "build:routed:dry-run": "tsc && node .tmp/cli/build-routed-dry-run.js",
     "build:routed:readonly": "tsc && node .tmp/cli/build-routed-readonly.js",
     "diagnose:routed:readonly": "tsc && node .tmp/cli/diagnose-routed-readonly.js",
+    "plan:incremental": "tsc && node .tmp/cli/plan-incremental.js",
     "writeback:routed:dry-run": "tsc && node .tmp/cli/writeback-routed-readonly.js --dry-run",
     "writeback:routed": "tsc && node .tmp/cli/writeback-routed-readonly.js --write",
     "assign-id:dry": "tsc && node .tmp/cli/assign-id.js --dry-run",

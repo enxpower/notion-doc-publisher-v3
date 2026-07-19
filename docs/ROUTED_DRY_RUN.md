@@ -28,7 +28,7 @@ Default output:
 dist/routes/ARCBOS/site
 dist/routes/ENERGIZE/site
 dist/routes/AGIM/site
-dist/routes/GONG/site
+dist/routes/GONG/site/gong-docs
 dist/routes/{BRAND}/manifest.json
 dist/routes/routed-build-summary.json
 ```
@@ -57,7 +57,8 @@ Each route defines:
 - target repository, when confirmed
 - target base URL/domain
 - CNAME value for planning only
-- presentation profile key for confirmed brands; GONG remains null until separately confirmed
+- presentation profile key
+- optional path prefix and publisher-owned deployment root
 - allowed URL namespaces
 
 Confirmed target repositories come from `docs/HTML_PUBLISHING_GOVERNANCE.md`:
@@ -67,9 +68,12 @@ Confirmed target repositories come from `docs/HTML_PUBLISHING_GOVERNANCE.md`:
 | ARCBOS | `enxpower/docs-arcbos-v2` | `https://docs.arcbos.com` |
 | ENERGIZE | `enxpower/docs-energize-v2` | `https://docs.energizeos.com` |
 | AGIM | `enxpower/agim-docs` | `https://docs.agim.ca` |
-| GONG | unconfirmed, deployment blocked | `https://enxpower.com` |
+| GONG | `enxpower/pub` | `https://enxpower.com/gong-docs` |
 
-Because no GONG target repository or presentation profile is confirmed in committed governance/config, the GONG route is renderable for local dry-run inspection with generic brand fallback behavior, but its deployment plan is blocked.
+GONG is configured as a path-prefixed route on the `enxpower.com` origin. Its
+publisher-owned deployment root is `gong-docs`; routed output for GONG must stay
+inside that root and must not modify the `enxpower/pub` repository root,
+`gong-vi/`, CNAME, or unrelated project folders.
 
 ## Safety Model
 

@@ -6,7 +6,7 @@ import { VALID_PRIVATE_LINK_NAMESPACES, isPrivateLinkVisibility, normalizeVisibi
 import { renderDocumentHtml, renderDocsRootHtml, renderIndexHtml, renderNamespaceRootHtml } from "../render/render-html.js";
 import { autoFillDocuments, createReport, loadDocuments, publishableDocuments, skippedDueToErrors, validateLoadedDocuments, writeJson } from "./shared.js";
 import { isPublicIndexListed, isPublishableCandidate } from "../validate/validate.js";
-import { computeBrandCanonicalUrl, resolveBrandRoute, type BrandRoute } from "../routing/brand-routing.js";
+import { computeBrandCanonicalUrl, computeRouteBaseUrl, resolveBrandRoute, type BrandRoute } from "../routing/brand-routing.js";
 import { loadBrandRoutes } from "../routing/routes.js";
 
 await runCli(async () => {
@@ -189,7 +189,8 @@ function configForDocumentRoute(config: AppConfig, routes: BrandRoute[], documen
   const route = resolveBrandRoute(routes, document.meta.brand.label);
   return {
     ...config,
-    targetSiteDomain: route.targetDomain
+    targetSiteDomain: computeRouteBaseUrl(route),
+    pdfPath: route.pdfPath ?? "pdf"
   };
 }
 

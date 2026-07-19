@@ -16,5 +16,11 @@
     "tagline": "",
     "shareImage": "agim-share-preview.png",
     "favicon": "agim-share-preview.png"
+  },
+  "GONG": {
+    "displayName": "GONG",
+    "tagline": "",
+    "shareImage": "gong-share-preview.png",
+    "favicon": "gong-favicon.svg"
   }
 }
