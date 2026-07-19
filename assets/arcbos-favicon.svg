@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+  <defs><linearGradient id="steel" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3a4047"/><stop offset="1" stop-color="#23282d"/></linearGradient></defs>
+  <path d="M60 6 L104 31 L104 81 L60 106 L16 81 L16 31 Z" fill="url(#steel)" stroke="#0d0f11" stroke-width="3"/>
+  <path d="M60 16 L95 36 L95 76 L60 96 L25 76 L25 36 Z" fill="none" stroke="#4a525a" stroke-width="1.5" opacity="0.7"/>
+  <circle cx="60" cy="56" r="15" fill="#0d0f11" stroke="#FFB400" stroke-width="3"/>
+  <circle cx="60" cy="56" r="6.5" fill="#FFB400"/>
+  <g stroke="#FFB400" stroke-width="2.4" stroke-linecap="round"><line x1="60" y1="33" x2="60" y2="40"/><line x1="83" y1="56" x2="76" y2="56"/><line x1="37" y1="56" x2="44" y2="56"/></g>
+  <path d="M30 78 L60 70 L90 78 L90 84 L60 76 L30 84 Z" fill="#FFB400"/>
+  <g fill="#c7ced4"><rect x="32" y="88" width="8" height="6" rx="1"/><rect x="44" y="88" width="8" height="6" rx="1"/><rect x="56" y="88" width="8" height="6" rx="1"/><rect x="68" y="88" width="8" height="6" rx="1"/><rect x="80" y="88" width="8" height="6" rx="1"/></g>
+</svg>
