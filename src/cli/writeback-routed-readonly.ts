@@ -5,7 +5,7 @@ import { loadDocuments } from "./shared.js";
 import { loadRoutedDryRunConfig, routedDryRunDocuments } from "../fixtures/routed-dry-run.js";
 import { NotionWriteback } from "../notion/writeback.js";
 import { buildRoutedReadonly, loadRoutedReadonlyConfigFromEnvironment } from "../routing/routed-readonly.js";
-import { computeRouteFinalUrl, normalizeBrand, type BrandRoute } from "../routing/brand-routing.js";
+import { computeBrandCanonicalUrl, normalizeBrand, type BrandRoute } from "../routing/brand-routing.js";
 import { createFixtureRoutedPdfRenderer } from "../routing/routed-pdf.js";
 import { loadBrandRoutes, routesWithOutputBase } from "../routing/routes.js";
 import {
@@ -117,9 +117,13 @@ function routedWritebackFixtureDocuments(routes: BrandRoute[]) {
   const routeByBrand = new Map(routes.map((route) => [normalizeBrand(route.brand), route]));
   return routedDryRunDocuments().map((document) => {
     const copy = structuredClone(document);
-    const route = routeByBrand.get(normalizeBrand(copy.meta.brand.label));
-    copy.meta.publishedUrl = copy.meta.brand.label === "ENERGIZE" && route
-      ? computeRouteFinalUrl(route, copy.meta.canonicalPath)
+    copy.meta.publishedUrl = copy.meta.brand.label === "ENERGIZE" && routeByBrand.has(normalizeBrand(copy.meta.brand.label))
+      ? computeBrandCanonicalUrl({
+          routes,
+          brandLabel: copy.meta.brand.label,
+          canonicalPath: copy.meta.canonicalPath,
+          docId: copy.meta.docId
+        })
       : "";
     return copy;
   });

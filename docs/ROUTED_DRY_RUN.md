@@ -64,7 +64,7 @@ Confirmed target repositories come from `docs/HTML_PUBLISHING_GOVERNANCE.md`:
 
 | Brand | Target Repository | Target Base URL |
 |---|---|---|
-| ARCBOS | `enxpower/docs-arcbos-v2` | `https://ref.arcbos.com` |
+| ARCBOS | `enxpower/docs-arcbos-v2` | `https://docs.arcbos.com` |
 | ENERGIZE | `enxpower/docs-energize-v2` | `https://docs.energizeos.com` |
 | AGIM | `enxpower/agim-docs` | `https://docs.agim.ca` |
 | GONG | unconfirmed, deployment blocked | `https://enxpower.com` |

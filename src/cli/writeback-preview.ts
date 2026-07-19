@@ -2,6 +2,8 @@ import fs from "node:fs/promises";
 import { loadConfigOrThrow, loadPreviewDeployConfig, runCli, UserFacingError, type AppConfig } from "../config.js";
 import { isPrivateLinkVisibility, type BuildReport, type ValidationIssue } from "../model/document.js";
 import { NotionWriteback } from "../notion/writeback.js";
+import { computeBrandCanonicalUrl, type BrandRoute } from "../routing/brand-routing.js";
+import { loadBrandRoutes } from "../routing/routes.js";
 
 type ReportDocument = BuildReport["documents"][number];
 
@@ -10,6 +12,7 @@ await runCli(async () => {
   const preview = loadPreviewDeployConfig();
   const validationReport = await readReport("dist/reports/validation-report.json");
   const buildReport = await readOptionalReport("dist/reports/build-report.json");
+  const routes = await loadBrandRoutes();
   const writeback = new NotionWriteback(config);
   await writeback.assertSchema();
 
@@ -18,6 +21,7 @@ await runCli(async () => {
   const warningMessagesByPage = groupIssues(validationReport.warnings);
   const buildFailed = process.env.BUILD_RESULT === "failure" || validationReport.errors.length > 0;
   const deployFailed = preview.enabled && process.env.DEPLOY_RESULT !== "success";
+  const mutatedPageIds = new Set<string>();
 
   if (validationReport.documents.length === 0 && buildFailed) {
     console.warn(
@@ -29,30 +33,48 @@ await runCli(async () => {
 
   for (const document of validationReport.documents) {
     if (buildFailed && errorMessagesByPage.has(document.pageId)) {
-      await writeback.updateDocumentFailed(document.pageId, errorMessagesByPage.get(document.pageId)!.join("; "), preview.runId);
+      await updatePageOnce(mutatedPageIds, document.pageId, () =>
+        writeback.updateDocumentFailed(document.pageId, errorMessagesByPage.get(document.pageId)!.join("; "), preview.runId)
+      );
       continue;
     }
 
     if (builtDocIds.has(document.docId)) {
       if (deployFailed) {
-        await writeback.updateDocumentFailed(document.pageId, "Preview deployment failed after static build.", preview.runId);
-        continue;
-      }
-      if (!preview.enabled) {
-        await writeback.updateDocumentSkipped(
-          document.pageId,
-          "Preview deployment skipped because PREVIEW_DEPLOY_ENABLED is not true.",
-          preview.runId
+        await updatePageOnce(mutatedPageIds, document.pageId, () =>
+          writeback.updateDocumentFailed(document.pageId, "Preview deployment failed after static build.", preview.runId)
         );
         continue;
       }
-      const url = publishedUrl(preview.baseUrl, document.path);
-      await writeback.updateDocumentSuccess(document.pageId, url, preview.runId);
+      if (!preview.enabled) {
+        await updatePageOnce(mutatedPageIds, document.pageId, () =>
+          writeback.updateDocumentSkipped(
+            document.pageId,
+            "Preview deployment skipped because PREVIEW_DEPLOY_ENABLED is not true.",
+            preview.runId
+          )
+        );
+        continue;
+      }
+      let url: string;
+      try {
+        url = publishedUrl(routes, document);
+      } catch (error) {
+        await updatePageOnce(mutatedPageIds, document.pageId, () =>
+          writeback.updateDocumentFailed(document.pageId, sanitizeWritebackMessage(error), preview.runId)
+        );
+        continue;
+      }
+      await updatePageOnce(mutatedPageIds, document.pageId, () =>
+        writeback.updateDocumentSuccess(document.pageId, url, preview.runId)
+      );
       continue;
     }
 
     const message = skipMessage(document, config, warningMessagesByPage.get(document.pageId));
-    await writeback.updateDocumentSkipped(document.pageId, message, preview.runId);
+    await updatePageOnce(mutatedPageIds, document.pageId, () =>
+      writeback.updateDocumentSkipped(document.pageId, message, preview.runId)
+    );
   }
 
   console.log(`Notion preview write-back updated ${validationReport.documents.length} document(s).`);
@@ -103,9 +125,28 @@ function skipMessage(document: ReportDocument, config: AppConfig, warnings: stri
   return "Skipped: document was not included in preview build output.";
 }
 
-function publishedUrl(baseUrl: string | undefined, canonicalPath: string): string {
-  if (!baseUrl) {
-    throw new UserFacingError("PREVIEW_BASE_URL is required to write published URLs.");
+function publishedUrl(routes: BrandRoute[], document: ReportDocument): string {
+  return computeBrandCanonicalUrl({
+    routes,
+    brandLabel: document.brand,
+    canonicalPath: document.path,
+    docId: document.docId
+  });
+}
+
+async function updatePageOnce(mutatedPageIds: Set<string>, pageId: string, update: () => Promise<void>): Promise<void> {
+  if (mutatedPageIds.has(pageId)) {
+    console.warn("Write-back: duplicate Notion page update skipped.");
+    return;
   }
-  return `${baseUrl}${canonicalPath}`;
+  mutatedPageIds.add(pageId);
+  await update();
+}
+
+function sanitizeWritebackMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  return message
+    .replace(/https?:\/\/[^\s"]+/g, "[redacted-url]")
+    .replace(/[0-9a-f]{32}/gi, "[redacted-id]")
+    .slice(0, 180);
 }

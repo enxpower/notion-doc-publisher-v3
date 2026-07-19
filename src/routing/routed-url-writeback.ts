@@ -9,7 +9,7 @@ import type { DocumentModel } from "../model/document.js";
 import { enableNotionMutationAllowList } from "../notion/read-only-guard.js";
 import { isPublishableCandidate } from "../validate/validate.js";
 import {
-  computeRouteFinalUrl,
+  computeBrandCanonicalUrl,
   isSafeRelativePublicPath,
   normalizeBrand,
   type BrandRoute
@@ -120,7 +120,12 @@ export function createRoutedUrlWritebackPlan(input: {
     let targetUrl = "";
 
     if (!reason && route && manifest) {
-      targetUrl = computeRouteFinalUrl(route, document.meta.canonicalPath);
+      targetUrl = computeBrandCanonicalUrl({
+        routes: input.routes,
+        brandLabel: document.meta.brand.label,
+        canonicalPath: document.meta.canonicalPath,
+        docId: document.meta.docId
+      });
       reason = validateEligibleOutput(document, manifest, targetUrl, input.outputBaseRoot);
       if (!reason && seenPageIds.has(pageId)) {
         action = "invalid";

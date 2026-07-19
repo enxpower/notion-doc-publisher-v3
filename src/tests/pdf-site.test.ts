@@ -38,7 +38,8 @@ function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
       ARCBOS: {
         displayName: "ARCBOS",
         tagline: "Engineering documents",
-        shareImage: "arcbos-share-preview.png"
+        shareImage: "arcbos-share-preview.png",
+        favicon: "arcbos-share-preview.png"
       }
     },
     registerPublic: false,
@@ -212,6 +213,10 @@ test("rendered document HTML keeps print, PDF, metadata, social preview, and pag
     html.includes('<meta property="og:image" content="https://docs.example.test/assets/arcbos-share-preview.png">'),
     "social preview image metadata must remain present"
   );
+  assert.ok(
+    html.includes('<link rel="icon" type="image/png" href="../../assets/arcbos-share-preview.png">'),
+    "rendered HTML must reference the ARCBOS favicon mapping"
+  );
   assert.ok(html.includes('<meta name="twitter:card" content="summary_large_image">'), "Twitter card metadata must remain present");
   assert.ok(html.includes('<main class="document">'), "document page structure must keep the main document root");
   assert.ok(html.includes('<header class="document-masthead">'), "document masthead must remain present");
@@ -219,6 +224,39 @@ test("rendered document HTML keeps print, PDF, metadata, social preview, and pag
   assert.ok(html.includes('<h1>Test Agreement</h1>'), "document h1 must remain present");
   assert.ok(html.includes('<div class="document-meta-grid"'), "metadata grid must remain present");
   assert.ok(html.includes('<section class="document-content">'), "document content section must remain present");
+});
+
+test("rendered document HTML references the ENERGIZE favicon for ENERGIZE pages", async () => {
+  const html = await renderDocumentHtml(
+    makeDoc({
+      docId: "ENERGIZE-MEM-2607-0029",
+      brand: { label: "ENERGIZE", token: "ENERGIZE", slug: "energize" },
+      visibility: "Client",
+      shareToken: "energizeclienttoken",
+      canonicalPath: "/clients/energizeclienttoken/"
+    }),
+    makeConfig({
+      targetSiteDomain: "https://docs.energizeos.com",
+      brandTokens: { ARCBOS: "ARCBOS", ENERGIZE: "ENERGIZE" },
+      brandProfiles: {
+        ARCBOS: {
+          displayName: "ARCBOS",
+          tagline: "Engineering documents",
+          shareImage: "arcbos-share-preview.png",
+          favicon: "arcbos-share-preview.png"
+        },
+        ENERGIZE: {
+          displayName: "ENERGIZE",
+          tagline: "",
+          shareImage: "energizeos-share-preview.png",
+          favicon: "energizeos-share-preview.png"
+        }
+      }
+    })
+  );
+
+  assert.ok(html.includes('<link rel="icon" type="image/png" href="../../assets/energizeos-share-preview.png">'));
+  assert.ok(!html.includes("arcbos-share-preview.png"));
 });
 
 // ── 10. preview-publish.yml installs Typst ───────────────────────────────────
@@ -284,7 +322,26 @@ test("preview-publish.yml pdf:site step references PDF_REQUIRED env var", async 
   );
 });
 
-// ── 14. Existing HTML renderer content is unchanged ──────────────────────────
+// ── 14. Preview Pages artifact excludes private/intermediate files ───────────
+
+test("preview-publish.yml uploads a sanitized public Pages artifact", async () => {
+  const src = await fs.readFile(
+    path.resolve(".github/workflows/preview-publish.yml"),
+    "utf8"
+  );
+
+  assert.ok(src.includes("Prepare public Pages artifact"));
+  assert.ok(src.includes("rm -rf dist-pages"));
+  assert.ok(src.includes("cp -R dist/. dist-pages/"));
+  assert.ok(src.includes("-name '*.typ'"), "Typst intermediates must be excluded from the public Pages artifact");
+  assert.ok(src.includes("-path '*/reports/*'"), "build reports must be excluded from the public Pages artifact");
+  assert.ok(src.includes("-path '*/routed-url-writeback/*'"), "writeback artifacts must be excluded from Pages");
+  assert.ok(src.includes("Credential-shaped content blocked from Pages artifact"));
+  assert.ok(src.includes("path: dist-pages"), "Pages upload must use the sanitized artifact root");
+  assert.ok(!src.includes("path: dist\n"), "Pages upload must not publish raw dist");
+});
+
+// ── 15. Existing HTML renderer content is unchanged ──────────────────────────
 
 test("render-blocks.ts is not modified (content rendering unchanged)", async () => {
   const src = await fs.readFile(path.resolve("src/render/render-blocks.ts"), "utf8");
@@ -294,7 +351,7 @@ test("render-blocks.ts is not modified (content rendering unchanged)", async () 
   );
 });
 
-// ── 15. renderActions output is used in template via {{actions}} slot ─────────
+// ── 16. renderActions output is used in template via {{actions}} slot ─────────
 
 test("render-html.ts passes renderActions output through the actions template slot", async () => {
   const src = await fs.readFile(path.resolve("src/render/render-html.ts"), "utf8");

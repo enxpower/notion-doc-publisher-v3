@@ -49,7 +49,7 @@ test("routed URL plan uses correct ARCBOS and ENERGIZE routed domains", async ()
   const arcbos = bundle.privateRecords.find((record) => record.brand === "ARCBOS")!;
   const energize = bundle.privateRecords.find((record) => record.brand === "ENERGIZE")!;
 
-  assert.equal(arcbos.targetPublishedUrl, "https://ref.arcbos.com/docs/ARCBOS-SPEC-2606-0001/");
+  assert.equal(arcbos.targetPublishedUrl, "https://docs.arcbos.com/docs/ARCBOS-SPEC-2606-0001/");
   assert.equal(energize.targetPublishedUrl, "https://docs.energizeos.com/clients/energizeclient01/");
   assert.equal(bundle.plan.eligibleByBrand.ARCBOS, 1);
   assert.equal(bundle.plan.eligibleByBrand.ENERGIZE, 1);
@@ -71,11 +71,11 @@ test("pageToDocument preserves existing PUBLISHED_URL for idempotent routed writ
       Status: selectProperty("Approved"),
       Visibility: selectProperty("Public"),
       Publish: { type: "checkbox", checkbox: true },
-      PUBLISHED_URL: { type: "url", url: "https://ref.arcbos.com/docs/ARCBOS-SPEC-2606-0001/" }
+      PUBLISHED_URL: { type: "url", url: "https://docs.arcbos.com/docs/ARCBOS-SPEC-2606-0001/" }
     }
   }, [], config);
 
-  assert.equal(document.meta.publishedUrl, "https://ref.arcbos.com/docs/ARCBOS-SPEC-2606-0001/");
+  assert.equal(document.meta.publishedUrl, "https://docs.arcbos.com/docs/ARCBOS-SPEC-2606-0001/");
 });
 
 test("cross-brand routed URL mismatch is rejected before writeback", async () => {
@@ -210,7 +210,7 @@ test("current ENERGIZE writeback plan audits newly publishable rows without touc
     docId: "ENERGIZE-AGR-2606-0602",
     canonicalPath: "/docs/ENERGIZE-AGR-2606-0602/",
     visibility: "Public",
-    publishedUrl: "https://ref.arcbos.com/docs/ENERGIZE-AGR-2606-0602/"
+    publishedUrl: "https://docs.arcbos.com/docs/ENERGIZE-AGR-2606-0602/"
   });
   const draft = makeDoc("ENERGIZE", "page-draft", {
     docId: "ENERGIZE-AGR-2606-0603",

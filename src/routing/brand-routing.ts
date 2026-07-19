@@ -1,5 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
+import { UserFacingError } from "../config.js";
+import { parseDocId } from "../doc-id/generator.js";
 import type { DocumentModel } from "../model/document.js";
 
 export type BrandRoute = {
@@ -239,6 +241,58 @@ export function computeRouteFinalUrl(route: BrandRoute, canonicalPath: string): 
   const base = route.targetDomain.trim().replace(/\/+$/, "");
   const pathValue = canonicalPath.startsWith("/") ? canonicalPath : `/${canonicalPath}`;
   return `${base}${pathValue}`;
+}
+
+export function resolveBrandRoute(routes: BrandRoute[], brandLabel: string): BrandRoute {
+  const brand = normalizeBrand(brandLabel);
+  if (!brand) {
+    throw new UserFacingError("Brand-aware canonical URL resolution blocked: Brand is missing.");
+  }
+  const route = routes.find((candidate) => normalizeBrand(candidate.brand) === brand);
+  if (!route) {
+    throw new UserFacingError(`Brand-aware canonical URL resolution blocked: unknown Brand ${brand}.`);
+  }
+  return route;
+}
+
+export function computeBrandCanonicalUrl(input: {
+  routes: BrandRoute[];
+  brandLabel: string;
+  canonicalPath: string;
+  docId?: string;
+}): string {
+  const route = resolveBrandRoute(input.routes, input.brandLabel);
+  assertCanonicalPathAllowedForRoute(route, input.canonicalPath, input.docId);
+  return computeRouteFinalUrl(route, input.canonicalPath);
+}
+
+export function assertCanonicalPathAllowedForRoute(route: BrandRoute, canonicalPath: string, docId?: string): void {
+  const relative = canonicalPathToSafeRelative(canonicalPath);
+  if (!relative) {
+    throw new UserFacingError("Brand-aware canonical URL resolution blocked: canonical path is missing or unsafe.");
+  }
+  const namespace = relative.split("/")[0] ?? "";
+  if (!route.allowedUrlNamespaces?.includes(namespace)) {
+    throw new UserFacingError(
+      `Brand-aware canonical URL resolution blocked: namespace ${namespace || "(empty)"} is not allowed for ${normalizeBrand(route.brand)}.`
+    );
+  }
+  if (namespace === "docs" && docId) {
+    const parsed = parseDocId(docId);
+    if (parsed && parsed.brandToken !== normalizeBrand(route.brand)) {
+      throw new UserFacingError(
+        `Brand-aware canonical URL resolution blocked: DOC_ID brand token ${parsed.brandToken} does not match ${normalizeBrand(route.brand)}.`
+      );
+    }
+  }
+}
+
+function canonicalPathToSafeRelative(canonicalPath: string): string | undefined {
+  if (!canonicalPath.startsWith("/")) {
+    return undefined;
+  }
+  const relative = canonicalPath.replace(/^\/|\/$/g, "");
+  return isSafeRelativePublicPath(relative) ? relative : undefined;
 }
 
 function normalizeOutputRoot(value: string): string {

@@ -612,6 +612,9 @@ async function copyRouteStaticAssets(outputRoot: string, route: BrandRoute, conf
   const assets = new Set(["favicon.ico", "favicon.png"]);
   const profile = route.presentationProfileKey ? config.brandProfiles[route.presentationProfileKey] : undefined;
   assets.add(profile?.shareImage ?? "share-preview.png");
+  if (profile?.favicon) {
+    assets.add(profile.favicon);
+  }
 
   for (const asset of assets) {
     try {

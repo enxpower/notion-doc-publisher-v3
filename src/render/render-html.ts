@@ -9,6 +9,7 @@ type BrandPresentation = {
   displayName: string;
   tagline: string;
   shareImage?: string;
+  favicon?: string;
 };
 
 type TocEntry = { level: number; text: string; id: string };
@@ -201,10 +202,11 @@ function buildMetaTags(
   const lines: string[] = [];
   const domain = config.targetSiteDomain?.replace(/\/+$/, "") ?? "";
   const shareImageFile = brand.shareImage ?? "share-preview.png";
+  const faviconFile = brand.favicon ?? "favicon.ico";
   const ogImage = domain ? escapeHtml(`${domain}/assets/${shareImageFile}`) : "";
   const twitterCard = ogImage ? "summary_large_image" : "summary";
 
-  lines.push(`<link rel="icon" href="${ROOT_RELATIVE_FROM_DOC}assets/favicon.ico">`);
+  lines.push(renderFaviconLink(faviconFile, ROOT_RELATIVE_FROM_DOC));
 
   if (isPrivateLink) {
     const ogTitle = escapeHtml(truncate(meta.title || `${brand.displayName} Document`, 60));
@@ -278,6 +280,7 @@ function buildRegisterMetaTags(config: AppConfig, rootRelative: string): string 
   const twitterCard = ogImage ? "summary_large_image" : "summary";
   const lines: string[] = [];
 
+  lines.push(renderFaviconLink("favicon.ico", rootRelative));
   lines.push(`<meta name="description" content="${escapeHtml(ogDesc)}">`);
   lines.push(`<meta property="og:type" content="website">`);
   lines.push(`<meta property="og:title" content="${escapeHtml(ogTitle)}">`);
@@ -294,6 +297,11 @@ function buildRegisterMetaTags(config: AppConfig, rootRelative: string): string 
   if (ogImage) lines.push(`<meta name="twitter:image" content="${ogImage}">`);
 
   return lines.join("\n    ");
+}
+
+function renderFaviconLink(file: string, rootRelative: string): string {
+  const type = file.endsWith(".png") ? ' type="image/png"' : file.endsWith(".svg") ? ' type="image/svg+xml"' : "";
+  return `<link rel="icon"${type} href="${rootRelative}assets/${escapeHtml(file)}">`;
 }
 
 /* ----------------------------------------------------------------
@@ -434,7 +442,8 @@ function resolveBrand(label: string, config: AppConfig): BrandPresentation {
   return {
     displayName: profile?.displayName?.trim() || label || "Document",
     tagline: profile?.tagline?.trim() || "",
-    shareImage: profile?.shareImage?.trim() || undefined
+    shareImage: profile?.shareImage?.trim() || undefined,
+    favicon: profile?.favicon?.trim() || undefined
   };
 }
 
