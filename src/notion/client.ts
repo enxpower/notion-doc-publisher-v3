@@ -74,8 +74,12 @@ export class NotionClient {
     return await this.request<NotionDatabase>(`/databases/${this.config.notionDatabaseId}`, { method: "GET" });
   }
 
-  async updatePageProperties(pageId: string, properties: Record<string, unknown>): Promise<void> {
-    assertNotionMutationAllowed("updatePageProperties");
+  async retrievePage(pageId: string): Promise<NotionPage> {
+    return await this.request<NotionPage>(`/pages/${pageId}`, { method: "GET" });
+  }
+
+  async updatePageProperties(pageId: string, properties: Record<string, unknown>, guardOperation = "updatePageProperties"): Promise<void> {
+    assertNotionMutationAllowed(guardOperation);
     await this.request(`/pages/${pageId}`, {
       method: "PATCH",
       body: JSON.stringify({ properties })

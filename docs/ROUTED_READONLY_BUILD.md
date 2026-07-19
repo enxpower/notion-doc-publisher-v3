@@ -132,8 +132,41 @@ manifest as failed or blocked, blocks that brand's deployment dry-run plan, and
 does not delete, overwrite, or mutate another brand's successful output. Notion
 remains read-only for the entire command.
 
+## Routed URL Writeback
+
+Stage 10 adds a separate route-aware Published URL writeback path:
+
+```sh
+npm run writeback:routed:dry-run
+npm run writeback:routed
+```
+
+The dry-run command loads the same single `NOTION_DATABASE_ID`, performs the
+guarded routed readonly HTML/PDF build, and writes a sanitized local plan under
+`dist/routed-url-writeback/`. It does not mutate Notion.
+
+The write command performs the same plan first, creates a private gitignored
+backup of previous Published URL values, and then permits exactly one mutation
+operation through the Notion mutation guard: `updatePublishedUrlOnly`. That
+operation writes only the `PUBLISHED_URL` property. It does not write DOC_ID,
+Share Token, namespace, portal category, status, timestamp, PDF properties, or
+any build-status fields.
+
+A record is eligible only when it is accepted in the routed build, belongs to a
+confirmed deployment-valid route, has a valid routed canonical URL, generated
+HTML, successful routed PDF output, and same-brand HTML-to-PDF link integrity.
+Rejected, draft, filtered, collision-affected, failed-PDF, missing-HTML,
+unknown-brand, and unconfirmed-route records are skipped.
+
+The public writeback plan contains only counts, sanitized aliases, safe reason
+codes, idempotency status, and URL fingerprints. The private backup contains the
+minimum page correlation and previous Published URL values required for a future
+owner-approved rollback; it is written only under gitignored `dist/` paths and
+is never part of a deployable site root.
+
 ## Disabled
 
-This command does not deploy, clone or push production repositories, dispatch
-workflows, update GitHub Pages settings, write Notion fields, assign DOC_IDs,
-or autofill Share Token, namespace, portal category, URL, status, or PDF fields.
+The routed readonly build command does not deploy, clone or push production
+repositories, dispatch workflows, update GitHub Pages settings, write Notion
+fields, assign DOC_IDs, or autofill Share Token, namespace, portal category,
+URL, status, or PDF fields.

@@ -10,6 +10,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import type { AppConfig } from "../config.js";
 import { NotionClient } from "../notion/client.js";
+import { enableNotionMutationAllowList } from "../notion/read-only-guard.js";
 import { NotionWriteback } from "../notion/writeback.js";
 
 type RequestCall = {
@@ -46,7 +47,7 @@ function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
   };
 }
 
-function fakeNotionClient(calls: PagePropertyCall[]): { updatePageProperties: (pageId: string, properties: Record<string, unknown>) => Promise<void> } {
+function fakeNotionClient(calls: PagePropertyCall[]): { updatePageProperties: (pageId: string, properties: Record<string, unknown>, guardOperation?: string) => Promise<void> } {
   return {
     async updatePageProperties(pageId: string, properties: Record<string, unknown>): Promise<void> {
       calls.push({ pageId, properties });
@@ -118,6 +119,43 @@ test("failed deployment status writeback never writes a successful published URL
   assert.deepEqual(calls[0]!.properties.BUILD_STATUS, { select: { name: "failed" } });
   assert.ok(!("PUBLISHED_URL" in calls[0]!.properties), "failed deployment must not write PUBLISHED_URL");
   assert.ok(!("PUBLISHED_AT" in calls[0]!.properties), "failed deployment must not write PUBLISHED_AT");
+});
+
+test("NotionWriteback.updatePublishedUrlOnly writes only PUBLISHED_URL", async () => {
+  const calls: PagePropertyCall[] = [];
+  const writeback = new NotionWriteback(makeConfig());
+  (writeback as unknown as { client: ReturnType<typeof fakeNotionClient> }).client = fakeNotionClient(calls);
+
+  await writeback.updatePublishedUrlOnly("page-url-only", "https://docs.example.test/docs/ARCBOS-SPEC-2606-0001/");
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0]!.pageId, "page-url-only");
+  assert.deepEqual(calls[0]!.properties, {
+    PUBLISHED_URL: { url: "https://docs.example.test/docs/ARCBOS-SPEC-2606-0001/" }
+  });
+});
+
+test("Notion mutation allow-list permits only routed URL writeback operation", async () => {
+  const calls: PagePropertyCall[] = [];
+  const writeback = new NotionWriteback(makeConfig());
+  (writeback as unknown as { client: ReturnType<typeof fakeNotionClient> }).client = fakeNotionClient(calls);
+  const restore = enableNotionMutationAllowList("test-writeback", ["updatePublishedUrlOnly"]);
+  try {
+    await writeback.updatePublishedUrlOnly("page-url-only", "https://docs.example.test/docs/ARCBOS-SPEC-2606-0001/");
+    await assert.rejects(
+      () => writeback.updateDocumentSuccess("page-success", "https://docs.example.test/docs/x/", "run"),
+      /Notion mutation blocked/
+    );
+    await assert.rejects(
+      () => writeback.writeAutoFillProperties("page-token", { shareToken: "stabletoken1" }),
+      /Notion mutation blocked/
+    );
+  } finally {
+    restore();
+  }
+
+  assert.equal(calls.length, 1);
+  assert.deepEqual(Object.keys(calls[0]!.properties), ["PUBLISHED_URL"]);
 });
 
 test("writeback-preview composes success URL from supplied base URL and canonical path", async () => {

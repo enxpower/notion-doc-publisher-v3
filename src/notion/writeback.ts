@@ -40,6 +40,18 @@ export class NotionWriteback {
     });
   }
 
+  async updatePublishedUrlOnly(pageId: string, url: string): Promise<void> {
+    assertNotionMutationAllowed("updatePublishedUrlOnly");
+    await this.client.updatePageProperties(pageId, {
+      PUBLISHED_URL: { url }
+    }, "updatePublishedUrlOnly");
+  }
+
+  async readPublishedUrl(pageId: string): Promise<string> {
+    const page = await this.client.retrievePage(pageId);
+    return readPublishedUrl(page.properties.PUBLISHED_URL);
+  }
+
   async updateDocumentSkipped(pageId: string, message: string, runId: string): Promise<void> {
     assertNotionMutationAllowed("updateDocumentSkipped");
     await this.updateStatus(pageId, "skipped", message, runId);
@@ -80,6 +92,17 @@ export class NotionWriteback {
       await this.client.updatePageProperties(pageId, updates);
     }
   }
+}
+
+function readPublishedUrl(property: unknown): string {
+  if (!property || typeof property !== "object" || Array.isArray(property)) {
+    return "";
+  }
+  const value = property as { type?: unknown; url?: unknown };
+  if (value.type !== "url" || typeof value.url !== "string") {
+    return "";
+  }
+  return value.url.trim();
 }
 
 export function assertWritebackSchema(database: NotionDatabase): void {
