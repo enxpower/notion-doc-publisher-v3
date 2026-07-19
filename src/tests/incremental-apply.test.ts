@@ -26,6 +26,7 @@ test("incremental apply creates only action documents and writes lifecycle succe
   const branchDocuments = fixture.documents.filter((document) => normalizeBrand(document.meta.brand.label) !== "ARCBOS");
   const plan = createIncrementalPlan({ documents: branchDocuments, routes: fixture.routes, config: fixture.config, now: NOW });
   const client = new RecordingLifecycleClient();
+  await fs.writeFile(path.join(fixture.repositories.AGIM!, "index.html"), "existing agim portal\n", "utf8");
 
   const result = await executeIncrementalApply({
     documents: branchDocuments,
@@ -50,6 +51,7 @@ test("incremental apply creates only action documents and writes lifecycle succe
   const gongPdf = result.nextState.records.find((record) => record.brand === "GONG")!.ownedFiles.find((file) => file.endsWith(".pdf"));
   assert.ok(gongPdf);
   await assertFileExists(path.join(fixture.repositories.GONG!, gongPdf));
+  assert.equal(await fs.readFile(path.join(fixture.repositories.AGIM!, "index.html"), "utf8"), "existing agim portal\n");
 });
 
 test("incremental apply fails closed for ARCBOS Pages artifact changes without artifact support", async () => {
