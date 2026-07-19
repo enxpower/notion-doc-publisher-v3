@@ -1,0 +1,58 @@
+name: ARCBOS Pages Clean Deploy
+
+on:
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
+jobs:
+  clean-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: https://docs.arcbos.com
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate workflow safety
+        run: node scripts/clean-arcbos-pages-artifact.mjs validate-workflow
+
+      - name: Verify active artifact identity
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/clean-arcbos-pages-artifact.mjs verify-source
+
+      - name: Download active Pages artifact
+        uses: actions/download-artifact@v4
+        with:
+          repository: enxpower/notion-doc-publisher-v3
+          run-id: 29675281140
+          artifact-ids: 8438733239
+          github-token: ${{ github.token }}
+          path: _active-pages-artifact
+          merge-multiple: true
+
+      - name: Build clean ARCBOS artifact
+        run: node scripts/clean-arcbos-pages-artifact.mjs clean _active-pages-artifact _clean-pages-artifact
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload clean Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _clean-pages-artifact
+
+      - name: Deploy clean Pages artifact
+        id: deployment
+        uses: actions/deploy-pages@v4
