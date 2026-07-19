@@ -16,19 +16,17 @@ Every phase must preserve:
 
 ## Current Phase
 
-**Phase 2: Minimal Implementation / Preview Deploy (v0.2.0-preview-deploy)**
+**Phase 1 production release complete (v1.0.0, July 19, 2026)**
 
-Allowed work:
-- Preview/test publishing via GitHub Actions + GitHub Pages.
-- Improvements to validation, build, and write-back logic.
-- Governance adoption.
-- Documentation and test improvements.
+Released scope:
+- ARCBOS and ENERGIZE routed publishing are live.
+- One Notion database remains the source of truth.
+- HTML and PDF outputs are brand-isolated.
+- Published URL writeback is route-aware and idempotent.
+- AGIM is configured but inactive because it has no current publishable output.
+- GONG remains blocked pending owner confirmation of its target repository.
 
-Not allowed:
-- Production deployment to docs-arcbos-v2, docs-energize-v2, or other production repositories.
-- PDF automation.
-- Approval workflows.
-- Writes to production repositories.
+Phase 1 is frozen. No additional Phase 1 features are accepted.
 
 ## Phase 0: Governance Foundation (Completed)
 

@@ -14,24 +14,43 @@
  * Run with:  npm test
  */
 import { strict as assert } from "node:assert";
+import crypto from "node:crypto";
 import { test } from "node:test";
 import type { AppConfig } from "../config.js";
 import { createAssignmentPlan, parseDocId } from "../doc-id/generator.js";
 import { emptyValidation, type DocumentModel } from "../model/document.js";
+import { computeCanonicalPath } from "../notion/properties.js";
+import { NotionWriteback } from "../notion/writeback.js";
 import { isPublicIndexListed, isPublishableCandidate, validateDocuments } from "../validate/validate.js";
-import { publishableDocuments, skippedDueToErrors } from "../cli/shared.js";
+import { autoFillDocuments, publishableDocuments, skippedDueToErrors } from "../cli/shared.js";
 import { lintSecurityConfig } from "../cli/security-lint.js";
 import { renderActions } from "../render/render-html.js";
 
 function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
   return {
+    notionToken: "test-notion-token",
+    notionDatabaseId: "test-database-id",
+    targetSiteDomain: "https://docs.example.test",
     publishableStatuses: new Set(["Approved", "Published"]),
     allowedVisibility: new Set(["Public"]),
     allowedBrands: null,
     docIdYearMonth: "2606",
-    autoGenerateShareToken: true,
+    brandTokens: { ARCBOS: "ARCBOS", ENERGIZE: "ENERGIZE", AGIM: "AGIM", GONG: "GONG" },
+    documentTypeTokens: { Specification: "SPEC", Agreement: "AGR", Memo: "MEM", Report: "RPT" },
+    brandProfiles: {
+      ARCBOS: { displayName: "ARCBOS", tagline: "Engineered for extreme conditions", shareImage: "arcbos-share-preview.png" },
+      ENERGIZE: { displayName: "ENERGIZE", tagline: "Clean power systems", shareImage: "energize-share-preview.png" },
+      AGIM: { displayName: "AGIM", tagline: "Industrial mobility", shareImage: "agim-share-preview.png" },
+      GONG: { displayName: "GONG", tagline: "Operating documents", shareImage: "gong-share-preview.png" }
+    },
+    registerPublic: false,
+    robotsDisallowDocs: false,
     allowMissingShareToken: false,
+    legacyUnlistedDocsPath: false,
+    autoGenerateShareToken: true,
     autoFillPrivateNamespace: true,
+    autoFillPortalCategory: true,
+    legacyPrivateDocIdUrls: false,
     ...overrides
   } as AppConfig;
 }
@@ -81,6 +100,43 @@ test("assignment plan continues the month sequence and never reuses ids", () => 
   assert.equal(plan.errors.length, 0);
   assert.equal(plan.assignments.length, 1);
   assert.equal(plan.assignments[0]!.docId, "ARCBOS-SPEC-2606-0008");
+  assert.match(plan.assignments[0]!.docId, /^ARCBOS-SPEC-2606-\d{4}$/);
+  assert.equal(plan.assignments[0]!.pageId, "page-fresh");
+});
+
+test("assignment plan never reassigns an existing DOC_ID", () => {
+  const existing = makeDoc({ docId: "ARCBOS-SPEC-2606-0007" }, "page-existing");
+  const plan = createAssignmentPlan([existing], makeConfig());
+
+  assert.equal(plan.errors.length, 0);
+  assert.equal(plan.assignments.length, 0);
+  assert.equal(existing.meta.docId, "ARCBOS-SPEC-2606-0007");
+});
+
+test("assignment sequence remains globally unique across brands and document types", () => {
+  const arcbos = makeDoc({ docId: "ARCBOS-SPEC-2606-0007" }, "page-arcbos");
+  const energize = makeDoc(
+    {
+      docId: "ENERGIZE-AGR-2606-0011",
+      brand: { label: "ENERGIZE", token: "ENERGIZE", slug: "energize" },
+      documentType: { label: "Agreement", token: "AGR", slug: "agreement" }
+    },
+    "page-energize"
+  );
+  const agimFresh = makeDoc(
+    {
+      docId: "",
+      brand: { label: "AGIM", token: "AGIM", slug: "agim" },
+      documentType: { label: "Memo", token: "MEM", slug: "memo" }
+    },
+    "page-agim"
+  );
+  const plan = createAssignmentPlan([arcbos, energize, agimFresh], makeConfig());
+
+  assert.equal(plan.errors.length, 0);
+  assert.deepEqual(plan.assignments, [
+    { pageId: "page-agim", title: "Test Document", docId: "AGIM-MEM-2606-0012" }
+  ]);
 });
 
 test("assignment plan blocks on duplicate existing DOC_IDs", () => {
@@ -261,6 +317,112 @@ test("invalid Share Token is a blocking error; short-but-valid is a warning", ()
   assert.ok(bad.validation.errors.some((e) => e.code === "INVALID_SHARE_TOKEN"));
   assert.ok(short.validation.warnings.some((e) => e.code === "SHORT_SHARE_TOKEN"));
   assert.equal(short.validation.errors.length, 0);
+});
+
+/* ---------------- Randomized URL behaviour ---------------- */
+
+test("missing Share Token is generated from deterministic mocked randomness and written only to the matching page", async () => {
+  const originalRandomBytes = crypto.randomBytes;
+  const originalWriteAutoFillProperties = NotionWriteback.prototype.writeAutoFillProperties;
+  const writes: Array<{
+    pageId: string;
+    props: Parameters<NotionWriteback["writeAutoFillProperties"]>[1];
+  }> = [];
+  const expectedToken = "1a".repeat(8);
+  (crypto as unknown as { randomBytes: (size: number) => Buffer }).randomBytes = (size: number): Buffer => {
+    return Buffer.alloc(size, 0x1a);
+  };
+  NotionWriteback.prototype.writeAutoFillProperties = async function (
+    pageId: string,
+    props: Parameters<NotionWriteback["writeAutoFillProperties"]>[1]
+  ): Promise<void> {
+    writes.push({ pageId, props });
+  };
+
+  try {
+    const document = makeDoc(
+      {
+        visibility: "Client",
+        shareToken: "",
+        privateLinkNamespace: "",
+        canonicalPath: ""
+      },
+      "page-private"
+    );
+
+    await autoFillDocuments([document], makeConfig());
+
+    assert.equal(document.meta.shareToken, expectedToken);
+    assert.equal(document.meta.privateLinkNamespace, "clients");
+    assert.equal(document.meta.canonicalPath, `/clients/${expectedToken}/`);
+    assert.deepEqual(writes, [
+      { pageId: "page-private", props: { shareToken: expectedToken, namespace: "clients" } }
+    ]);
+  } finally {
+    (crypto as unknown as { randomBytes: typeof originalRandomBytes }).randomBytes = originalRandomBytes;
+    NotionWriteback.prototype.writeAutoFillProperties = originalWriteAutoFillProperties;
+  }
+});
+
+test("existing Share Token and canonical URL remain stable across repeated builds", async () => {
+  const originalRandomBytes = crypto.randomBytes;
+  const originalWriteAutoFillProperties = NotionWriteback.prototype.writeAutoFillProperties;
+  const writes: Array<{
+    pageId: string;
+    props: Parameters<NotionWriteback["writeAutoFillProperties"]>[1];
+  }> = [];
+  (crypto as unknown as { randomBytes: (size: number) => Buffer }).randomBytes = (): Buffer => {
+    throw new Error("randomBytes must not be called for an existing Share Token");
+  };
+  NotionWriteback.prototype.writeAutoFillProperties = async function (
+    pageId: string,
+    props: Parameters<NotionWriteback["writeAutoFillProperties"]>[1]
+  ): Promise<void> {
+    writes.push({ pageId, props });
+  };
+
+  try {
+    const document = makeDoc(
+      {
+        visibility: "Unlisted",
+        shareToken: "stabletoken123",
+        privateLinkNamespace: "partners",
+        canonicalPath: "/partners/stabletoken123/"
+      },
+      "page-stable"
+    );
+    const canonicalUrl = `${makeConfig().targetSiteDomain}${document.meta.canonicalPath}`;
+
+    await autoFillDocuments([document], makeConfig());
+    await autoFillDocuments([document], makeConfig());
+
+    assert.equal(document.meta.shareToken, "stabletoken123");
+    assert.equal(document.meta.canonicalPath, "/partners/stabletoken123/");
+    assert.equal(`${makeConfig().targetSiteDomain}${document.meta.canonicalPath}`, canonicalUrl);
+    assert.deepEqual(writes, []);
+  } finally {
+    (crypto as unknown as { randomBytes: typeof originalRandomBytes }).randomBytes = originalRandomBytes;
+    NotionWriteback.prototype.writeAutoFillProperties = originalWriteAutoFillProperties;
+  }
+});
+
+test("private canonical paths stay token-based and do not expose guessable DOC_IDs", () => {
+  const docId = "ARCBOS-SPEC-2606-0008";
+  const pathValue = computeCanonicalPath("Client", docId, "clienttoken123", "");
+
+  assert.equal(pathValue, "/clients/clienttoken123/");
+  assert.ok(!pathValue.includes(docId), "private canonical path must not include the sequential DOC_ID");
+});
+
+test("private namespace canonical path behaviour remains unchanged", () => {
+  const docId = "ARCBOS-SPEC-2606-0008";
+
+  assert.equal(computeCanonicalPath("Client", docId, "clienttoken123", "partners"), "/clients/clienttoken123/");
+  assert.equal(computeCanonicalPath("Internal", docId, "internaltoken123", "clients"), "/internal/internaltoken123/");
+  assert.equal(computeCanonicalPath("Unlisted", docId, "partnertoken123", "partners"), "/partners/partnertoken123/");
+  assert.equal(computeCanonicalPath("Unlisted", docId, "fallbacktoken123", ""), "/clients/fallbacktoken123/");
+  assert.equal(computeCanonicalPath("Unlisted", docId, "fallbacktoken123", "bad-namespace"), "/clients/fallbacktoken123/");
+  assert.equal(computeCanonicalPath("Public", docId, "ignoredtoken123", "partners"), "/docs/ARCBOS-SPEC-2606-0008/");
 });
 
 test("unsafe link protocols are blocked", () => {

@@ -27,6 +27,11 @@ export type ExportResult = {
   lineCount: number;
 };
 
+export type ExportDocumentTypstOptions = {
+  onAssetError?: (error: unknown) => void;
+  logCompileOutput?: boolean;
+};
+
 /** Finds a document by DOC_ID (case-insensitive). Throws UserFacingError when not found. */
 export function findDocument(docs: DocumentModel[], docId: string): DocumentModel {
   const upper = docId.trim().toUpperCase();
@@ -66,12 +71,17 @@ export async function exportDocumentTypst(
   doc: DocumentModel,
   config: AppConfig,
   outDir: string = PDF_OUTPUT_DIR,
+  options: ExportDocumentTypstOptions = {},
 ): Promise<{ typPath: string; pdfPath: string | null; lineCount: number }> {
   if (doc.assets.length > 0) {
     try {
       await copyDocumentAssets(doc, outDir);
     } catch (err) {
-      console.warn(`[PDF] Asset download failed (continuing without images): ${String(err)}`);
+      if (options.onAssetError) {
+        options.onAssetError(err);
+      } else {
+        console.warn(`[PDF] Asset download failed (continuing without images): ${String(err)}`);
+      }
     }
   }
 
@@ -95,7 +105,7 @@ export async function exportDocumentTypst(
 
   try {
     const output = execSync(`typst compile "${typPath}" "${pdfPath}" 2>&1`, { encoding: "utf8" });
-    if (output.trim()) console.log(output.trim());
+    if (output.trim() && options.logCompileOutput !== false) console.log(output.trim());
   } catch (e) {
     const msg = e instanceof Error ? ((e as { stdout?: string }).stdout ?? e.message) : String(e);
     throw new UserFacingError(

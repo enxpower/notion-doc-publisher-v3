@@ -24,6 +24,7 @@ export function pageToDocument(page: NotionPage, blocks: NotionBlock[], config: 
   const privateLinkNamespace = readOptionalSelect(page.properties["Private Link Namespace"] as PropertyValue | undefined);
   const category = readOptionalSelect(page.properties.Category as PropertyValue | undefined);
   const portalCategory = readOptionalSelect(page.properties["Portal Category"] as PropertyValue | undefined);
+  const publishedUrl = readOptionalUrl(page.properties.PUBLISHED_URL as PropertyValue | undefined);
 
   const brandToken = brandLabel ? config.brandTokens[brandLabel] : undefined;
   const typeToken = documentTypeLabel ? config.documentTypeTokens[documentTypeLabel] : undefined;
@@ -55,7 +56,8 @@ export function pageToDocument(page: NotionPage, blocks: NotionBlock[], config: 
       privateLinkNamespace,
       category,
       portalCategory,
-      canonicalPath
+      canonicalPath,
+      publishedUrl
     },
     content,
     assets,
@@ -169,6 +171,11 @@ function readOptionalSelect(property: PropertyValue | undefined): string {
   if (!property || property.type !== "select") return "";
   const select = property.select as { name?: string } | null | undefined;
   return select?.name?.trim() ?? "";
+}
+
+function readOptionalUrl(property: PropertyValue | undefined): string {
+  if (!property || property.type !== "url") return "";
+  return typeof property.url === "string" ? property.url.trim() : "";
 }
 
 // Backward-compat alias — prefer VALID_PRIVATE_LINK_NAMESPACES from model/document.ts

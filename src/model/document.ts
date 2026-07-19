@@ -37,6 +37,7 @@ export type DocumentMeta = {
   category: string;
   portalCategory: string;
   canonicalPath: string;
+  publishedUrl?: string;
 };
 
 export type DocumentAsset = {
