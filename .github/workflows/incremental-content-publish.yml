@@ -101,7 +101,7 @@ jobs:
           path: state
           ssh-key: ${{ secrets.DEPLOY_KEY_STATE }}
           ssh-known-hosts: ${{ steps.github-host-keys.outputs.known_hosts }}
-          persist-credentials: false
+          persist-credentials: true
 
       - name: Checkout ENERGIZE target
         if: ${{ steps.execution.outputs.mode == 'apply' }}
@@ -111,7 +111,7 @@ jobs:
           path: targets/docs-energize-v2
           ssh-key: ${{ secrets.DEPLOY_KEY_ENERGIZE }}
           ssh-known-hosts: ${{ steps.github-host-keys.outputs.known_hosts }}
-          persist-credentials: false
+          persist-credentials: true
 
       - name: Checkout AGIM target
         if: ${{ steps.execution.outputs.mode == 'apply' }}
@@ -121,7 +121,7 @@ jobs:
           path: targets/agim-docs
           ssh-key: ${{ secrets.DEPLOY_KEY_AGIM }}
           ssh-known-hosts: ${{ steps.github-host-keys.outputs.known_hosts }}
-          persist-credentials: false
+          persist-credentials: true
 
       - name: Checkout GONG target
         if: ${{ steps.execution.outputs.mode == 'apply' }}
@@ -131,7 +131,7 @@ jobs:
           path: targets/pub
           ssh-key: ${{ secrets.DEPLOY_KEY_GONG }}
           ssh-known-hosts: ${{ steps.github-host-keys.outputs.known_hosts }}
-          persist-credentials: false
+          persist-credentials: true
 
       - name: Setup Node
         uses: actions/setup-node@v4
