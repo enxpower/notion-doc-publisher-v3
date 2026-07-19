@@ -1,6 +1,6 @@
 {
   "name": "notion-doc-publisher-v3",
-  "version": "0.2.0-preview-deploy",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "description": "Lightweight enterprise Notion document publisher V3",
