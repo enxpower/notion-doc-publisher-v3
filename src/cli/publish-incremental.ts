@@ -158,6 +158,7 @@ function sanitizeApplyResult(result: Awaited<ReturnType<typeof executeIncrementa
     recordResults: result.recordResults.map((record) => ({
       action: record.action,
       brand: record.brand,
+      docId: record.docId,
       status: record.status,
       reason: record.reason
     }))
