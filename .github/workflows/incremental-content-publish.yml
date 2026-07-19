@@ -21,6 +21,8 @@ on:
 permissions:
   contents: read
   issues: write
+  pages: write
+  id-token: write
 
 concurrency:
   group: incremental-content-publish
@@ -35,6 +37,9 @@ jobs:
        github.actor == 'enxpower' &&
        startsWith(github.event.comment.body, '/phase2-publish PHASE2-INCREMENTAL-PUBLISH '))
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: https://docs.arcbos.com
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
       NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
@@ -49,7 +54,7 @@ jobs:
       INCREMENTAL_APPLY_RESULT_PATH: dist/incremental-apply/result.json
       INCREMENTAL_VERIFICATION_RESULT_PATH: dist/incremental-apply/verification.json
       INCREMENTAL_WRITEBACK_RESULT_PATH: dist/incremental-apply/writeback.json
-      PHASE2_DEPLOYED_REPO_ROOTS_JSON: '{"ENERGIZE":"targets/docs-energize-v2","AGIM":"targets/agim-docs","GONG":"targets/pub"}'
+      PHASE2_DEPLOYED_REPO_ROOTS_JSON: '{"ARCBOS":"targets/arcbos-pages","ENERGIZE":"targets/docs-energize-v2","AGIM":"targets/agim-docs","GONG":"targets/pub"}'
 
     steps:
       - name: Checkout publisher
@@ -204,6 +209,55 @@ jobs:
           INCREMENTAL_LIFECYCLE_WRITEBACK: "false"
         run: npm run publish:incremental
 
+      - name: Detect ARCBOS Pages artifact work
+        id: arcbos-artifact
+        if: ${{ steps.execution.outputs.mode == 'apply' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          required="$(jq -r '[.brandResults[] | select(.brand == "ARCBOS" and .deployed == true)] | length > 0' "$INCREMENTAL_APPLY_RESULT_PATH")"
+          echo "required=$required" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare sanitized ARCBOS Pages artifact
+        if: ${{ steps.arcbos-artifact.outputs.required == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          artifact_root="targets/arcbos-pages"
+          test -d "$artifact_root"
+          printf 'docs.arcbos.com\n' > "$artifact_root/CNAME"
+          touch "$artifact_root/.nojekyll"
+          find "$artifact_root" -type f \( \
+            -name '*.typ' -o -name '.env' -o -name '.env.*' \
+            -o -iname '*backup*' -o -iname '*audit* -o -iname '*diagnostic*' \
+            -o -path '*/reports/*' -o -path '*/diagnostics/*' \
+          \) -delete
+          blocked_count="$(find "$artifact_root" -type f \( -name '*.typ' -o -name '.env' -o -name '.env.*' -o -path '*/reports/*' -o -path '*/diagnostics/*' \) | wc -l | tr -d ' ')"
+          if [ "$blocked_count" != "0" ]; then
+            echo "Blocked files remain in ARCBOS Pages artifact: $blocked_count"
+            exit 1
+          fi
+          secret_match_count="$({ grep -RIE 'github_pat_|gh[pousr]_|ntn_|Bearer[[:space:]]+[A-Za-z0-9._-]{20,}' "$artifact_root" || true; } | wc -l | tr -d ' ')"
+          if [ "$secret_match_count" != "0" ]; then
+            echo "Credential-shaped content blocked from ARCBOS Pages artifact: $secret_match_count"
+            exit 1
+          fi
+
+      - name: Configure GitHub Pages for ARCBOS
+        if: ${{ steps.arcbos-artifact.outputs.required == 'true' }}
+        uses: actions/configure-pages@v5
+
+      - name: Upload ARCBOS Pages artifact
+        if: ${{ steps.arcbos-artifact.outputs.required == 'true' }}
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: targets/arcbos-pages
+
+      - name: Deploy ARCBOS Pages artifact
+        id: deploy-arcbos
+        if: ${{ steps.arcbos-artifact.outputs.required == 'true' }}
+        uses: actions/deploy-pages@v4
+
       - name: Validate target repository boundaries
         if: ${{ steps.execution.outputs.mode == 'apply' }}
         shell: bash
@@ -237,6 +291,11 @@ jobs:
           set -euo pipefail
           mkdir -p dist/phase2-run
           : > dist/phase2-run/target-commits.txt
+          if [ "${{ steps.arcbos-artifact.outputs.required }}" = "true" ]; then
+            printf 'ARCBOS pages-artifact\n' >> dist/phase2-run/target-commits.txt
+          else
+            printf 'ARCBOS unchanged\n' >> dist/phase2-run/target-commits.txt
+          fi
           for spec in \
             "ENERGIZE:targets/docs-energize-v2" \
             "AGIM:targets/agim-docs" \
@@ -300,6 +359,7 @@ jobs:
             echo ""
             echo "Mode: ${{ steps.execution.outputs.mode }}"
             echo "Render actions: ${{ steps.render-work.outputs.count || '0' }}"
+            echo "ARCBOS Pages artifact: ${{ steps.arcbos-artifact.outputs.required || 'false' }}"
             if [ -f "$INCREMENTAL_APPLY_RESULT_PATH" ]; then
               echo ""
               echo '```json'
@@ -333,6 +393,7 @@ jobs:
             echo "- Result: **$JOB_STATUS**"
             echo "- Run: https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
             echo "- Render actions detected: \`${{ steps.render-work.outputs.count || '0' }}\`"
+            echo "- ARCBOS Pages artifact deployed: \`${{ steps.arcbos-artifact.outputs.required || 'false' }}\`"
             if [ -f "$INCREMENTAL_APPLY_RESULT_PATH" ]; then
               echo "- Lifecycle counts: \`$(jq -c '.recordResults | group_by(.action) | map({key: .[0].action, value: length}) | from_entries' "$INCREMENTAL_APPLY_RESULT_PATH")\`"
               echo "- Work: rendered=\`$(jq -r '.renderedDocumentCount' "$INCREMENTAL_APPLY_RESULT_PATH")\`, pdfs=\`$(jq -r '.generatedPdfCount' "$INCREMENTAL_APPLY_RESULT_PATH")\`, brands=\`$(jq -r '.deployedBrandCount' "$INCREMENTAL_APPLY_RESULT_PATH")\`, copied=\`$(jq -r '.copiedFileCount' "$INCREMENTAL_APPLY_RESULT_PATH")\`, deleted=\`$(jq -r '.deletedFileCount' "$INCREMENTAL_APPLY_RESULT_PATH")\`"
