@@ -78,6 +78,7 @@ test("readonly production config reads only permitted runtime environment variab
     assert.equal(config.allowMissingShareToken, false);
     assert.equal(config.brandTokens.GONG, "GONG");
     assert.equal(config.documentTypeTokens.Report, "RPT");
+    assert.equal(config.brandProfiles.ENERGIZE?.favicon, "energizeos-share-preview.png");
     assert.ok(config.publishableStatuses.has("Approved"));
     assert.ok(config.publishableStatuses.has("Published"));
     assert.ok(config.publishableStatuses.has("Final"));
