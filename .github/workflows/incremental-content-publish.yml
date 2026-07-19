@@ -31,7 +31,7 @@ jobs:
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'issue_comment' &&
-       github.event.issue.number == 40 &&
+       github.event.issue.number == 44 &&
        github.actor == 'enxpower' &&
        startsWith(github.event.comment.body, '/phase2-publish PHASE2-INCREMENTAL-PUBLISH '))
     runs-on: ubuntu-latest
