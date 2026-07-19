@@ -6,7 +6,8 @@ import { runCli, UserFacingError } from "../config.js";
 import { routedDryRunDocuments, loadRoutedDryRunConfig } from "../fixtures/routed-dry-run.js";
 import { NotionWriteback } from "../notion/writeback.js";
 import { loadDocuments } from "./shared.js";
-import { createIncrementalPlan, type IncrementalStateManifest } from "../routing/incremental.js";
+import { createIncrementalPlan, type IncrementalPlan, type IncrementalStateManifest } from "../routing/incremental.js";
+import { assertIncrementalPlanUnchanged } from "../routing/incremental-plan-drift.js";
 import {
   executeIncrementalApply,
   type IncrementalApplyMode,
@@ -38,6 +39,12 @@ await runCli(async () => {
   const previousState = await readOptionalState(statePath);
   const documents = testMode ? routedDryRunDocuments() : await loadDocuments(config);
   const plan = createIncrementalPlan({ documents, routes, config, previousState });
+  const expectedPlanPath = process.env.INCREMENTAL_EXPECTED_PLAN_PATH?.trim() ||
+    (process.env.GITHUB_ACTIONS === "true" ? process.env.INCREMENTAL_PLAN_PATH?.trim() : undefined);
+  if (mode === "apply" && expectedPlanPath) {
+    const expectedPlan = await readExpectedPlan(path.resolve(expectedPlanPath));
+    assertIncrementalPlanUnchanged(expectedPlan, plan);
+  }
   const repositoryRoots = testMode
     ? await createFixtureRepositories(routes)
     : mode === "apply" ? readRepositoryRootsFromEnvironment() : {};
@@ -117,6 +124,19 @@ async function readOptionalState(filePath: string): Promise<IncrementalStateMani
     }
     throw error;
   }
+}
+
+async function readExpectedPlan(filePath: string): Promise<IncrementalPlan> {
+  let parsed: IncrementalPlan;
+  try {
+    parsed = JSON.parse(await fs.readFile(filePath, "utf8")) as IncrementalPlan;
+  } catch (error) {
+    throw new UserFacingError(`Could not read the prepared incremental plan: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  if (parsed.schema !== "notion-doc-publisher-v3/incremental-plan" || parsed.version !== 1 || !Array.isArray(parsed.records)) {
+    throw new UserFacingError("Prepared incremental plan has an unexpected schema.");
+  }
+  return parsed;
 }
 
 function readRepositoryRootsFromEnvironment(): Record<string, string> {
