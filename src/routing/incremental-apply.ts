@@ -343,12 +343,131 @@ async function copyStagedFile(input: {
   await fs.copyFile(source, target);
 }
 
-function emptyState(generatedAt: string): IncrementalStateManifest {
+async function removeOwnedFiles(input: {
+  repositoryRoot: string;
+  files: string[];
+  route: BrandRoute;
+}): Promise<string[]> {
+  const removed: string[] = [];
+  for (const file of input.files) {
+    if (!isSafeRelativePublicPath(file)) {
+      throw new UserFacingError(`Unsafe deletion path is blocked: ${file}`);
+    }
+    const deploymentRoot = input.route.deploymentRoot?.replace(/^\/+|\/+$/g, "") ?? "";
+    if (deploymentRoot && !file.startsWith(`${deploymentRoot}/`)) {
+      throw new UserFacingError(`Deletion outside deployment root is blocked: ${file}`);
+    }
+    const target = path.resolve(input.repositoryRoot, file);
+    assertInsideRoot(target, input.repositoryRoot, `Deletion target escapes repository root: ${file}`);
+    await fs.rm(target, { force: true });
+    removed.push(file);
+  }
+  return removed;
+}
+
+function moveDeletionPlan(record: IncrementalPlanRecord, previousRoute: BrandRoute): string[] {
+  const files = deletionPlanForRecord(record, previousRoute);
+  if (!record.previous || !record.desired) {
+    return files;
+  }
+  const sameDeploymentTarget =
+    normalizeBrand(record.previous.brand) === normalizeBrand(record.desired.brand) &&
+    record.previous.deploymentTarget === record.desired.deploymentTarget &&
+    record.previous.deploymentRoot === record.desired.deploymentRoot;
+  if (!sameDeploymentTarget) {
+    return files;
+  }
+  const desiredOwnedFiles = new Set(record.desired.ownedFiles);
+  return files.filter((file) => !desiredOwnedFiles.has(file));
+}
+
+function addDeploymentRoot(file: string, route: BrandRoute): string {
+  const deploymentRoot = route.deploymentRoot?.replace(/^\/+|\/+$/g, "") ?? "";
+  if (!deploymentRoot) {
+    return file;
+  }
+  if (file.startsWith(`${deploymentRoot}/`)) {
+    return file;
+  }
+  return `${deploymentRoot}/${file}`;
+}
+
+function filesToCopyForBrand(
+  manifestFiles: string[],
+  records: IncrementalPlanRecord[],
+  brand: string,
+  route: BrandRoute
+): string[] {
+  const wanted = new Set<string>();
+  for (const record of records) {
+    if (normalizeBrand(record.brand) !== brand || !record.desired) {
+      continue;
+    }
+    for (const file of record.desired.ownedFiles) {
+      wanted.add(removeDeploymentRoot(file, route));
+    }
+  }
+
+  for (const file of manifestFiles) {
+    if (isRuntimeAssetPath(file)) {
+      wanted.add(file);
+    }
+  }
+
+  return manifestFiles.filter((file) => wanted.has(file)).sort();
+}
+
+function removeDeploymentRoot(file: string, route: BrandRoute): string {
+  const deploymentRoot = route.deploymentRoot?.replace(/^\/+|\/+$/g, "") ?? "";
+  const normalized = file.replace(/^\/+/, "");
+  if (deploymentRoot && normalized.startsWith(`${deploymentRoot}/`)) {
+    return normalized.slice(deploymentRoot.length + 1);
+  }
+  return normalized;
+}
+
+function isRuntimeAssetPath(file: string): boolean {
+  return file.startsWith("assets/css/") ||
+    /^assets\/[^/]+\.(?:ico|png|jpg|jpeg|svg|webp)$/i.test(file);
+}
+
+function lifecycleWritebackForRecord(
+  record: IncrementalPlanRecord,
+  status: IncrementalApplyResult["recordResults"][number]["status"]
+): IncrementalLifecycleWriteback | undefined {
+  if (record.action === "NOOP" || record.action === "FILTERED") {
+    return undefined;
+  }
+  if (record.action === "INVALID") {
+    return {
+      pageId: record.pageId,
+      status: "failed",
+      action: record.action,
+      message: `Phase 2 incremental publish failed validation: ${record.reason}.`
+    };
+  }
+  if (status !== "success") {
+    return {
+      pageId: record.pageId,
+      status: "failed",
+      action: record.action,
+      message: `Phase 2 incremental publish failed: ${record.reason}.`
+    };
+  }
+  if (record.action === "REMOVE") {
+    return {
+      pageId: record.pageId,
+      status: "unpublished",
+      action: record.action,
+      message: "Phase 2 incremental publish removed the previously published output."
+    };
+  }
   return {
-    schema: "notion-doc-publisher-v3/incremental-state",
-    version: 1,
-    generatedAt,
-    records: []
+    pageId: record.pageId,
+    status: "success",
+    action: record.action,
+    message: `Phase 2 incremental publish ${record.action.toLowerCase()} completed successfully.`,
+    publishedUrl: record.desired?.finalUrl
   };
 }
 
@@ -364,122 +483,27 @@ function markBrandFailed(results: IncrementalApplyResult["recordResults"], brand
 function setRecordResult(
   results: IncrementalApplyResult["recordResults"],
   record: IncrementalPlanRecord,
-  status: "success" | "failed",
+  status: IncrementalApplyResult["recordResults"][number]["status"],
   reason: string
 ): void {
-  const result = results.find((candidate) => candidate.action === record.action && candidate.docId === record.docId);
+  const result = results.find((item) => item.action === record.action && item.docId === record.docId);
   if (result) {
     result.status = status;
     result.reason = reason;
   }
 }
 
-function filesToCopyForBrand(files: string[], records: IncrementalPlanRecord[], brand: string, route: BrandRoute): string[] {
-  const ownedFiles = new Set<string>();
-  for (const record of records) {
-    if (normalizeBrand(record.brand) !== brand || !record.desired) {
-      continue;
-    }
-    for (const file of record.desired.ownedFiles) {
-      ownedFiles.add(removeDeploymentRoot(file, route));
-    }
-  }
-  for (const file of files) {
-    if (isRuntimeAsset(file)) {
-      ownedFiles.add(file);
-    }
-  }
-  return [...ownedFiles].filter((file) => files.includes(file)).sort();
-}
-
-function isRuntimeAsset(file: string): boolean {
-  return file === "CNAME" || file === ".nojekyll" || file.startsWith("assets/css/") || /^assets\/[^/]+$/.test(file);
-}
-
-function removeDeploymentRoot(file: string, route: BrandRoute): string {
-  const root = route.deploymentRoot?.replace(/^\/+|\/+$/g, "") ?? "";
-  if (!root) {
-    return file;
-  }
-  return file === root ? "" : file.startsWith(`${root}/`) ? file.slice(root.length + 1) : file;
-}
-
-function addDeploymentRoot(file: string, route: BrandRoute): string {
-  const root = route.deploymentRoot?.replace(/^\/+|\/+$/g, "") ?? "";
-  return root ? `${root}/${file}` : file;
-}
-
-async function removeOwnedFiles(input: {
-  repositoryRoot: string;
-  files: string[];
-  route: BrandRoute;
-}): Promise<string[]> {
-  const removed: string[] = [];
-  for (const file of input.files) {
-    const target = path.resolve(input.repositoryRoot, file);
-    assertInsideRoot(target, input.repositoryRoot, `Deletion target escapes repository root: ${file}`);
-    await fs.rm(target, { force: true });
-    removed.push(file);
-    await removeEmptyParents(path.dirname(target), path.resolve(input.repositoryRoot, input.route.deploymentRoot ?? ""));
-  }
-  return removed;
-}
-
-async function removeEmptyParents(start: string, stop: string): Promise<void> {
-  let current = start;
-  while (current.startsWith(stop) && current !== stop) {
-    const entries = await fs.readdir(current).catch(() => undefined);
-    if (!entries || entries.length > 0) {
-      return;
-    }
-    await fs.rmdir(current);
-    current = path.dirname(current);
-  }
-}
-
-function moveDeletionPlan(record: IncrementalPlanRecord, previousRoute: BrandRoute): string[] {
-  const oldFiles = deletionPlanForRecord(record, previousRoute);
-  if (!record.desired || !record.previous || record.previous.targetRepository !== record.desired.targetRepository) {
-    return oldFiles;
-  }
-  const retained = new Set(record.desired.ownedFiles);
-  return oldFiles.filter((file) => !retained.has(file));
-}
-
-function lifecycleWritebackForRecord(
-  record: IncrementalPlanRecord,
-  status: IncrementalApplyResult["recordResults"][number]["status"]
-): IncrementalLifecycleWriteback | undefined {
-  if (record.action === "NOOP" || record.action === "FILTERED") {
-    return undefined;
-  }
-  if (status !== "success") {
-    return {
-      pageId: record.pageId,
-      status: "failed",
-      action: record.action,
-      message: record.reason
-    };
-  }
-  if (record.action === "REMOVE") {
-    return {
-      pageId: record.pageId,
-      status: "unpublished",
-      action: record.action,
-      message: "Removed the previous verified production output."
-    };
-  }
+function emptyState(generatedAt: string): IncrementalStateManifest {
   return {
-    pageId: record.pageId,
-    status: "success",
-    action: record.action,
-    message: `Incremental lifecycle ${record.action.toLowerCase()} completed.`,
-    publishedUrl: record.desired?.publishedUrl
+    schema: "notion-doc-publisher-v3/incremental-state",
+    version: 1,
+    generatedAt,
+    records: []
   };
 }
 
-function assertInsideRoot(target: string, root: string, message: string): void {
-  const relative = path.relative(path.resolve(root), target);
+function assertInsideRoot(candidate: string, root: string, message: string): void {
+  const relative = path.relative(path.resolve(root), path.resolve(candidate));
   if (relative.startsWith("..") || path.isAbsolute(relative)) {
     throw new UserFacingError(message);
   }
