@@ -155,8 +155,8 @@ jobs:
         run: |
           set -euo pipefail
           operational_steps="$(awk '
-            /name: Validate workflow safety/ { skip=1 }
-            /name: Create incremental lifecycle plan/ { skip=0 }
+            $0 == "      - name: Validate workflow safety" { skip=1 }
+            $0 == "      - name: Create incremental lifecycle plan" { skip=0 }
             skip != 1 { print }
           ' .github/workflows/incremental-content-publish.yml)"
           blocked="$(printf '%s' "$operational_steps" | grep -E 'npm run assign-id|npm run ci:writeback|npm run writeback:routed|preview-publish|PUBLISHER_DEPLOY_TOKEN|PUBLISHER_STATE_TOKEN|Share Token.*generate|Share Token.*rotate|PATCH https://api.notion.com|POST https://api.notion.com' || true)"
