@@ -15,7 +15,9 @@ await runCli(async () => {
   const config = testMode
     ? await loadRoutedDryRunConfig()
     : await loadRoutedReadonlyConfigFromEnvironment(routes);
-  const statePath = path.resolve(process.env.INCREMENTAL_STATE_PATH ?? "dist/incremental-state/state.json");
+  const statePath = path.resolve(
+    process.env.PHASE2_STATE_PATH ?? process.env.INCREMENTAL_STATE_PATH ?? "dist/incremental-state/state.json"
+  );
   const outputPath = path.resolve(process.env.INCREMENTAL_PLAN_PATH ?? "dist/incremental-plan/plan.json");
   const previousState = await readOptionalState(statePath);
 

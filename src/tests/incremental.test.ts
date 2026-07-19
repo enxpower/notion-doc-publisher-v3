@@ -363,11 +363,14 @@ test("filtered records and NOOP records are not treated as Notion mutation candi
 
 test("incremental content plan workflow is manual, fast, and non-mutating", async () => {
   const workflow = await fs.readFile(path.resolve(".github/workflows/incremental-content-plan.yml"), "utf8");
+  const plannerSource = await fs.readFile(path.resolve("src/cli/plan-incremental.ts"), "utf8");
   const operationalWorkflow = workflow.replace(
     /      - name: Validate workflow safety[\s\S]*?(?=      - name: Plan lifecycle actions)/,
     ""
   );
 
+  assert.ok(plannerSource.includes("process.env.PHASE2_STATE_PATH"));
+  assert.ok(plannerSource.includes("process.env.INCREMENTAL_STATE_PATH"));
   assert.ok(workflow.includes("workflow_dispatch:"));
   assert.ok(!workflow.includes("push:"));
   assert.ok(!workflow.includes("pull_request:"));
