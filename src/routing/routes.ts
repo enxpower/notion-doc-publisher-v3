@@ -9,6 +9,7 @@ type RawRoute = {
   targetDomain?: unknown;
   pathPrefix?: unknown;
   deploymentRoot?: unknown;
+  deploymentMode?: unknown;
   pdfPath?: unknown;
   cname?: unknown;
   routeId?: unknown;
@@ -63,6 +64,7 @@ function parseRoute(brand: string, raw: RawRoute | undefined): BrandRoute {
   const targetDomain = parseTargetDomain(stringField(raw.targetDomain, `${brand}.targetDomain`), `${brand}.targetDomain`);
   const pathPrefix = optionalPathPrefix(raw.pathPrefix, `${brand}.pathPrefix`);
   const deploymentRoot = optionalRelativeRoot(raw.deploymentRoot, `${brand}.deploymentRoot`);
+  const deploymentMode = deploymentModeField(raw.deploymentMode, `${brand}.deploymentMode`);
   const pdfPath = optionalRelativeRoot(raw.pdfPath, `${brand}.pdfPath`) || "pdf";
   const allowedUrlNamespaces = stringArrayField(raw.allowedUrlNamespaces, `${brand}.allowedUrlNamespaces`);
   if (allowedUrlNamespaces.length === 0) {
@@ -85,6 +87,7 @@ function parseRoute(brand: string, raw: RawRoute | undefined): BrandRoute {
     targetDomain,
     pathPrefix,
     deploymentRoot,
+    deploymentMode,
     pdfPath,
     cname,
     presentationProfileKey: presentationProfileKeyField(raw.presentationProfileKey, `${brand}.presentationProfileKey`, brand),
@@ -191,6 +194,16 @@ function optionalRelativeRoot(value: unknown, name: string): string {
     throw new UserFacingError(`Brand route field ${name} must be a safe relative path.`);
   }
   return normalized;
+}
+
+function deploymentModeField(value: unknown, name: string): BrandRoute["deploymentMode"] {
+  if (value === undefined || value === null || value === "") {
+    return "branch";
+  }
+  if (value !== "branch" && value !== "github-pages-artifact") {
+    throw new UserFacingError(`Brand route field ${name} must be branch or github-pages-artifact.`);
+  }
+  return value;
 }
 
 function isSafeRelativePath(value: string): boolean {

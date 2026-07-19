@@ -49,7 +49,6 @@ Production authoritative state is stored in the private repository
 through the `PHASE2_STATE_REPOSITORY` Actions variable. Cross-repository access
 uses target-specific write deploy keys:
 
-- `DEPLOY_KEY_ARCBOS` for `enxpower/docs-arcbos-v2`
 - `DEPLOY_KEY_ENERGIZE` for `enxpower/docs-energize-v2`
 - `DEPLOY_KEY_AGIM` for `enxpower/agim-docs`
 - `DEPLOY_KEY_GONG` for `enxpower/pub`
@@ -76,7 +75,7 @@ deployed repository tree. Example shape:
 
 ```json
 {
-  "ARCBOS": "/tmp/docs-arcbos-v2",
+  "ARCBOS": "/tmp/extracted-active-arcbos-pages-artifact",
   "ENERGIZE": "/tmp/docs-energize-v2"
 }
 ```
@@ -163,7 +162,7 @@ deployment fails before the replacement is verified.
 
 | Brand | Origin | Path Prefix | Client Route | Internal Route | Deployment Boundary |
 |---|---|---:|---|---|---|
-| ARCBOS | `https://docs.arcbos.com` | none | `/clients/<ShareToken>/` | `/internal/<ShareToken>/` | repository root |
+| ARCBOS | `https://docs.arcbos.com` | none | `/clients/<ShareToken>/` | `/internal/<ShareToken>/` | `notion-doc-publisher-v3` workflow Pages artifact |
 | ENERGIZE | `https://docs.energizeos.com` | none | `/clients/<ShareToken>/` | `/internal/<ShareToken>/` | repository root |
 | AGIM | `https://docs.agim.ca` | none | `/clients/<ShareToken>/` | `/internal/<ShareToken>/` | repository root, preserving `vi/` and unrelated portal files |
 | GONG | `https://enxpower.com` | `/gong-docs` | `/gong-docs/clients/<ShareToken>/` | `/gong-docs/internal/<ShareToken>/` | `gong-docs/**` only |
@@ -208,11 +207,18 @@ publish workflow.
 
 The GitHub Actions workflow `Incremental Content Publish` is also manual-only.
 Its first governed implementation can generate and apply routed incremental
-filesystem changes to checked-out target repositories, but it explicitly keeps
-`INCREMENTAL_LIFECYCLE_WRITEBACK` disabled in workflow execution. Production
-Notion lifecycle writeback requires a later verified post-deployment step so a
-successful lifecycle result cannot be written before target repository commits,
-Pages deployment, and live route checks have passed.
+filesystem changes to checked-out branch-based target repositories. ARCBOS is
+explicitly configured as a workflow Pages artifact target because
+`docs.arcbos.com` is served by this repository's Pages artifact, not by
+`docs-arcbos-v2` (`ref.arcbos.com`). Until a dedicated transactional artifact
+apply handler is added, ARCBOS non-`NOOP` actions fail closed rather than being
+written to the wrong branch repository.
+
+The workflow explicitly keeps `INCREMENTAL_LIFECYCLE_WRITEBACK` disabled in
+workflow execution. Production Notion lifecycle writeback requires a later
+verified post-deployment step so a successful lifecycle result cannot be written
+before target repository commits, Pages deployment, and live route checks have
+passed.
 
 ## Failure Safety
 

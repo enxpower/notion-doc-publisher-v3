@@ -12,6 +12,7 @@ export type BrandRoute = {
   targetDomain: string;
   pathPrefix?: string;
   deploymentRoot?: string;
+  deploymentMode?: "branch" | "github-pages-artifact";
   pdfPath?: string;
   cname?: string;
   presentationProfileKey?: string | null;

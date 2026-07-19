@@ -291,6 +291,11 @@ async function assertRepositoryRoots(
     if (!route?.targetRepository || route.repositoryConfirmed !== true) {
       throw new UserFacingError(`Target repository for ${brand} is not confirmed.`);
     }
+    if ((route.deploymentMode ?? "branch") !== "branch") {
+      throw new UserFacingError(
+        `Incremental apply for ${brand} requires ${route.deploymentMode} deployment support and cannot use a branch repository root.`
+      );
+    }
     const stat = await fs.stat(root).catch(() => undefined);
     if (!stat?.isDirectory()) {
       throw new UserFacingError(`Repository root for ${brand} is not a directory.`);

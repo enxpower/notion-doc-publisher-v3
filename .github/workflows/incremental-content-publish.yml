@@ -36,7 +36,7 @@ jobs:
       DOCUMENT_TYPE_TOKENS_JSON: ${{ vars.DOCUMENT_TYPE_TOKENS_JSON || secrets.DOCUMENT_TYPE_TOKENS_JSON }}
       PHASE2_STATE_PATH: state/incremental-state.json
       INCREMENTAL_APPLY_RESULT_PATH: dist/incremental-apply/result.json
-      PHASE2_DEPLOYED_REPO_ROOTS_JSON: '{"ARCBOS":"targets/docs-arcbos-v2","ENERGIZE":"targets/docs-energize-v2","AGIM":"targets/agim-docs","GONG":"targets/pub"}'
+      PHASE2_DEPLOYED_REPO_ROOTS_JSON: '{"ENERGIZE":"targets/docs-energize-v2","AGIM":"targets/agim-docs","GONG":"targets/pub"}'
 
     steps:
       - name: Validate apply confirmation
@@ -66,16 +66,6 @@ jobs:
           repository: ${{ vars.PHASE2_STATE_REPOSITORY }}
           path: state
           ssh-key: ${{ secrets.DEPLOY_KEY_STATE }}
-          ssh-known-hosts: ${{ steps.github-host-keys.outputs.known_hosts }}
-          persist-credentials: false
-
-      - name: Checkout ARCBOS target
-        if: ${{ inputs.mode == 'apply' }}
-        uses: actions/checkout@v4
-        with:
-          repository: enxpower/docs-arcbos-v2
-          path: targets/docs-arcbos-v2
-          ssh-key: ${{ secrets.DEPLOY_KEY_ARCBOS }}
           ssh-known-hosts: ${{ steps.github-host-keys.outputs.known_hosts }}
           persist-credentials: false
 
@@ -164,7 +154,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for repo in targets/docs-arcbos-v2 targets/docs-energize-v2 targets/agim-docs targets/pub; do
+          for repo in targets/docs-energize-v2 targets/agim-docs targets/pub; do
             git -C "$repo" config user.name "github-actions[bot]"
             git -C "$repo" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             if git -C "$repo" status --short | grep -q .; then

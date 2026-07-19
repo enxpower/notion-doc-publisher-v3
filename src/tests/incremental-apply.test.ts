@@ -23,11 +23,12 @@ import { loadBrandRoutes } from "../routing/routes.js";
 
 test("incremental apply creates only action documents and writes lifecycle success", async () => {
   const fixture = await makeFixture();
-  const plan = createIncrementalPlan({ documents: fixture.documents, routes: fixture.routes, config: fixture.config, now: NOW });
+  const branchDocuments = fixture.documents.filter((document) => normalizeBrand(document.meta.brand.label) !== "ARCBOS");
+  const plan = createIncrementalPlan({ documents: branchDocuments, routes: fixture.routes, config: fixture.config, now: NOW });
   const client = new RecordingLifecycleClient();
 
   const result = await executeIncrementalApply({
-    documents: fixture.documents,
+    documents: branchDocuments,
     routes: fixture.routes,
     config: fixture.config,
     plan,
@@ -39,16 +40,37 @@ test("incremental apply creates only action documents and writes lifecycle succe
     notionClient: client
   });
 
-  assert.equal(result.renderedDocumentCount, 4);
-  assert.equal(result.generatedPdfCount, 4);
-  assert.equal(result.deployedBrandCount, 4);
-  assert.equal(result.notionMutationCount, 4);
-  assert.equal(result.nextState.records.length, 4);
+  assert.equal(result.renderedDocumentCount, 3);
+  assert.equal(result.generatedPdfCount, 3);
+  assert.equal(result.deployedBrandCount, 3);
+  assert.equal(result.notionMutationCount, 3);
+  assert.equal(result.nextState.records.length, 3);
   assert.equal(client.updates.every((update) => update.status === "success" && update.publishedUrl), true);
   await assertFileExists(path.join(fixture.repositories.GONG!, "gong-docs", "internal", "gonginternal01", "index.html"));
   const gongPdf = result.nextState.records.find((record) => record.brand === "GONG")!.ownedFiles.find((file) => file.endsWith(".pdf"));
   assert.ok(gongPdf);
   await assertFileExists(path.join(fixture.repositories.GONG!, gongPdf));
+});
+
+test("incremental apply fails closed for ARCBOS Pages artifact changes without artifact support", async () => {
+  const fixture = await makeFixture();
+  const arcbosDocument = fixture.documents.find((document) => normalizeBrand(document.meta.brand.label) === "ARCBOS")!;
+  const plan = createIncrementalPlan({ documents: [arcbosDocument], routes: fixture.routes, config: fixture.config, now: NOW });
+
+  await assert.rejects(
+    () => executeIncrementalApply({
+      documents: [arcbosDocument],
+      routes: fixture.routes,
+      config: fixture.config,
+      plan,
+      repositoryRoots: fixture.repositories,
+      stagingRoot: fixture.stagingRoot,
+      mode: "apply",
+      now: NOW,
+      pdfRenderer: createFixtureRoutedPdfRenderer()
+    }),
+    /requires github-pages-artifact deployment support/
+  );
 });
 
 test("incremental apply NOOP renders nothing, deploys nothing, and does not mutate Notion", async () => {
@@ -86,10 +108,10 @@ test("incremental apply NOOP renders nothing, deploys nothing, and does not muta
 
 test("incremental apply REMOVE deletes only prior manifest-owned files and marks unpublished", async () => {
   const fixture = await makeFixture();
-  const document = structuredClone(fixture.documents[0]!);
+  const document = structuredClone(fixture.documents.find((candidate) => normalizeBrand(candidate.meta.brand.label) === "ENERGIZE")!);
   const previousState = successfulState([document], fixture.routes, fixture.config);
-  await writePreviousOwnedFiles(fixture.repositories.ARCBOS!, previousState.records[0]!);
-  await fs.writeFile(path.join(fixture.repositories.ARCBOS!, "assets", "shared.css"), "shared\n", "utf8");
+  await writePreviousOwnedFiles(fixture.repositories.ENERGIZE!, previousState.records[0]!);
+  await fs.writeFile(path.join(fixture.repositories.ENERGIZE!, "assets", "shared.css"), "shared\n", "utf8");
   document.meta.publish = false;
   const plan = createIncrementalPlan({ documents: [document], routes: fixture.routes, config: fixture.config, previousState, now: NOW });
   const client = new RecordingLifecycleClient();
@@ -110,9 +132,9 @@ test("incremental apply REMOVE deletes only prior manifest-owned files and marks
   assert.equal(result.deletedFileCount, 2);
   assert.equal(result.nextState.records.length, 0);
   assert.equal(client.updates[0]?.status, "unpublished");
-  await assertFileMissing(path.join(fixture.repositories.ARCBOS!, "docs", "ARCBOS-SPEC-2606-0001", "index.html"));
-  await assertFileMissing(path.join(fixture.repositories.ARCBOS!, "pdf", "ARCBOS-SPEC-2606-0001.pdf"));
-  await assertFileExists(path.join(fixture.repositories.ARCBOS!, "assets", "shared.css"));
+  await assertFileMissing(path.join(fixture.repositories.ENERGIZE!, "clients", "energizeclient01", "index.html"));
+  await assertFileMissing(path.join(fixture.repositories.ENERGIZE!, "pdf", "ENERGIZE-MEM-2606-0002.pdf"));
+  await assertFileExists(path.join(fixture.repositories.ENERGIZE!, "assets", "shared.css"));
 });
 
 test("incremental apply MOVE preserves identity, writes new route, and removes old route", async () => {

@@ -400,7 +400,7 @@ test("incremental content publish workflow is manual, guarded, and route-bounded
   assert.ok(!workflow.includes("schedule:"));
   assert.ok(workflow.includes("confirm_production"));
   assert.ok(workflow.includes("PHASE2-INCREMENTAL-PUBLISH"));
-  assert.ok(workflow.includes("DEPLOY_KEY_ARCBOS"));
+  assert.ok(!workflow.includes("DEPLOY_KEY_ARCBOS"));
   assert.ok(workflow.includes("DEPLOY_KEY_ENERGIZE"));
   assert.ok(workflow.includes("DEPLOY_KEY_AGIM"));
   assert.ok(workflow.includes("DEPLOY_KEY_GONG"));
@@ -411,6 +411,7 @@ test("incremental content publish workflow is manual, guarded, and route-bounded
   assert.ok(!operationalWorkflow.includes("PUBLISHER_STATE_TOKEN"));
   assert.ok(workflow.includes("PHASE2_STATE_PATH: state/incremental-state.json"));
   assert.ok(workflow.includes('"GONG":"targets/pub"'));
+  assert.ok(!workflow.includes("docs-arcbos-v2"));
   assert.ok(!workflow.includes("lifecycle_writeback"));
   assert.ok(workflow.includes('INCREMENTAL_LIFECYCLE_WRITEBACK: "false"'));
   assert.ok(workflow.includes("npm run publish:incremental:dry-run"));
@@ -515,7 +516,7 @@ function makePreviousRecord(overrides: Partial<DocumentStateRecord>): DocumentSt
     pathPrefix: "",
     canonicalPath: "/clients/previoustoken01/",
     finalUrl: "https://docs.arcbos.com/clients/previoustoken01/",
-    deploymentTarget: "enxpower/docs-arcbos-v2",
+    deploymentTarget: "enxpower/notion-doc-publisher-v3",
     deploymentRoot: "",
     ownedFiles: ["clients/previoustoken01/index.html", "pdf/ARCBOS-MEM-2606-0001.pdf"],
     contentHash: "content",

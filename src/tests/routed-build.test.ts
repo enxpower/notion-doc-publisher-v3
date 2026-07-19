@@ -29,10 +29,12 @@ test("brand route config contains exactly the four normalized dry-run brands", a
   const brands = routes.map((route) => route.brand).sort();
 
   assert.deepEqual(brands, ["AGIM", "ARCBOS", "ENERGIZE", "GONG"]);
-  assert.equal(routes.find((route) => route.brand === "ARCBOS")!.targetRepository, "enxpower/docs-arcbos-v2");
+  assert.equal(routes.find((route) => route.brand === "ARCBOS")!.targetRepository, "enxpower/notion-doc-publisher-v3");
   assert.equal(routes.find((route) => route.brand === "ARCBOS")!.targetDomain, "https://docs.arcbos.com");
+  assert.equal(routes.find((route) => route.brand === "ARCBOS")!.deploymentMode, "github-pages-artifact");
   assert.equal(routes.find((route) => route.brand === "ENERGIZE")!.targetRepository, "enxpower/docs-energize-v2");
   assert.equal(routes.find((route) => route.brand === "ENERGIZE")!.targetDomain, "https://docs.energizeos.com");
+  assert.equal(routes.find((route) => route.brand === "ENERGIZE")!.deploymentMode, "branch");
   assert.equal(routes.find((route) => route.brand === "AGIM")!.targetRepository, "enxpower/agim-docs");
   assert.equal(routes.find((route) => route.brand === "AGIM")!.targetDomain, "https://docs.agim.ca");
   assert.equal(routes.find((route) => route.brand === "GONG")!.targetRepository, "enxpower/pub");
@@ -55,7 +57,7 @@ test("brand route config rejects duplicate route identifiers", async () => {
 
 test("brand route config rejects duplicate repository/domain combinations", async () => {
   const configPath = await tempRouteConfig((config) => {
-    config.ENERGIZE.targetRepository = "enxpower/docs-arcbos-v2";
+    config.ENERGIZE.targetRepository = "enxpower/notion-doc-publisher-v3";
     config.ENERGIZE.targetDomain = "https://docs.arcbos.com";
     config.ENERGIZE.cname = "docs.arcbos.com";
   });

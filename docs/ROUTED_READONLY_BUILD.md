@@ -68,7 +68,7 @@ The configured Phase 2 production routes are:
 
 | Brand | Origin | Path Prefix | Publisher Boundary |
 |---|---:|---:|---|
-| ARCBOS | `https://docs.arcbos.com` | none | repository root |
+| ARCBOS | `https://docs.arcbos.com` | none | `notion-doc-publisher-v3` workflow Pages artifact |
 | ENERGIZE | `https://docs.energizeos.com` | none | repository root |
 | AGIM | `https://docs.agim.ca` | none | repository root, preserving `vi/` and existing portal content |
 | GONG | `https://enxpower.com` | `/gong-docs` | `gong-docs/**` only |
