@@ -152,7 +152,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          blocked="$(grep -E 'npm run assign-id|npm run ci:writeback|npm run writeback:routed|preview-publish|PUBLISHER_DEPLOY_TOKEN|PUBLISHER_STATE_TOKEN|Share Token.*generate|Share Token.*rotate|PATCH https://api.notion.com|POST https://api.notion.com' .github/workflows/incremental-content-publish.yml || true)"
+          operational_steps="$(awk '
+            /name: Validate workflow safety/ { skip=1 }
+            /name: Create incremental lifecycle plan/ { skip=0 }
+            skip != 1 { print }
+          ' .github/workflows/incremental-content-publish.yml)"
+          blocked="$(printf '%s' "$operational_steps" | grep -E 'npm run assign-id|npm run ci:writeback|npm run writeback:routed|preview-publish|PUBLISHER_DEPLOY_TOKEN|PUBLISHER_STATE_TOKEN|Share Token.*generate|Share Token.*rotate|PATCH https://api.notion.com|POST https://api.notion.com' || true)"
           if [ -n "$blocked" ]; then
             echo "Incremental content publish workflow references a blocked mutation or legacy publishing path."
             exit 1
@@ -179,7 +184,7 @@ jobs:
           validate_paths() {
             repo="$1"
             allowed="$2"
-            changed="$(git -C "$repo" diff --name-only --diff-filter=ACDMRTUXB || true)"
+            changed="$(git -C "$repo" status --porcelain=v1 --untracked-files=all | sed -E 's/^.. //' || true)"
             if [ -z "$changed" ]; then
               return 0
             fi
