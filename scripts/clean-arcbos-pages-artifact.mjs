@@ -420,6 +420,7 @@ async function validateWorkflow() {
     "Preview Publish",
     "npm run build",
     "npm run publish:preview",
+    "actions/upload-pages-artifact",
     "ROUTED_WRITEBACK",
     "NOTION_TOKEN",
     "NOTION_DATABASE_ID"
@@ -444,6 +445,12 @@ async function validateWorkflow() {
   }
   if (!workflow.includes("environment:") || !workflow.includes("github-pages")) {
     throw new Error("Clean deploy workflow must target the github-pages environment.");
+  }
+  if (!workflow.includes("actions/upload-artifact@v4")) {
+    throw new Error("Clean deploy workflow must upload a quiet Pages artifact archive.");
+  }
+  if (!workflow.includes("tar --dereference --hard-dereference") || workflow.includes(" -cvf ")) {
+    throw new Error("Clean deploy workflow must create the Pages archive without verbose path logging.");
   }
   console.log(JSON.stringify({ workflowValid: true }, null, 2));
 }
