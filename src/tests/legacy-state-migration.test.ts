@@ -34,12 +34,18 @@ test("legacy migration reconstructs verified deployed documents and produces NOO
   assert.ok(!gong.ownedFiles.includes("CNAME"));
 });
 
-test("legacy migration blocks records whose deployed PDF cannot be proven", async () => {
-  const fixture = await makeFixture({ omitPdfForBrand: "ENERGIZE" });
+test("legacy migration treats missing deployed output as a non-destructive CREATE candidate", async () => {
+  const fixture = await makeFixture({ omitHtmlForBrand: "ENERGIZE", omitPdfForBrand: "ENERGIZE" });
   const result = await migrateLegacyPhase1State(fixture);
 
-  assert.equal(result.errors.some((error) => error.code === "MISSING_DEPLOYED_PDF"), true);
+  assert.equal(result.errors.length, 0);
+  assert.equal(result.warnings.some((warning) => warning.code === "MISSING_DEPLOYED_HTML_CREATE_REQUIRED"), true);
+  assert.equal(result.warnings.some((warning) => warning.code === "MISSING_DEPLOYED_PDF_CREATE_REQUIRED"), true);
   assert.equal(result.migratedRecordCount, 3);
+  assert.equal(result.repairCandidates.length, 1);
+  assert.equal(result.repairCandidates[0]?.brand, "ENERGIZE");
+  assert.equal(result.repairCandidates[0]?.classification, "CREATE");
+  assert.equal(result.idempotencyPlan.counts.CREATE, 1);
   assert.equal(result.state.records.some((record) => record.brand === "ENERGIZE"), false);
 });
 
@@ -77,9 +83,12 @@ test("legacy migration sanitized summary excludes private state and page identif
     assert.equal(serialized.includes(document.meta.canonicalPath), false);
   }
   assert.deepEqual(summary.idempotencyCounts, result.idempotencyPlan.counts);
+  assert.equal(serialized.includes('"repairCandidates":'), false);
+  assert.equal(summary.repairCandidatesByBrand.ARCBOS ?? 0, 0);
 });
 
 async function makeFixture(options: {
+  omitHtmlForBrand?: string;
   omitPdfForBrand?: string;
   unmanagedFileBrand?: string;
   includeAssetForBrand?: string;
@@ -124,7 +133,13 @@ async function makeFixture(options: {
 
     const pages: Record<string, string> = {};
     for (const document of documents.filter((candidate) => normalizeBrand(candidate.meta.brand.label) === brand)) {
-      await writeDeployedDocument({ repositoryRoot, route, document, omitPdf: options.omitPdfForBrand === brand });
+      await writeDeployedDocument({
+        repositoryRoot,
+        route,
+        document,
+        omitHtml: options.omitHtmlForBrand === brand,
+        omitPdf: options.omitPdfForBrand === brand
+      });
       pages[document.source.notionPageId] = document.meta.docId;
     }
     await fs.writeFile(path.join(repositoryRoot, ".publisher_state.json"), `${JSON.stringify({ pages }, null, 2)}\n`, "utf8");
@@ -138,6 +153,7 @@ async function writeDeployedDocument(input: {
   repositoryRoot: string;
   route: BrandRoute;
   document: DocumentModel;
+  omitHtml: boolean;
   omitPdf: boolean;
 }): Promise<void> {
   const deploymentRoot = input.route.deploymentRoot?.replace(/^\/+|\/+$/g, "") ?? "";
@@ -146,14 +162,16 @@ async function writeDeployedDocument(input: {
   const htmlPath = path.join(input.repositoryRoot, prefix, canonicalRelative, "index.html");
   const pdfRelative = `${input.route.pdfPath ?? "pdf"}/${input.document.meta.docId}.pdf`;
   const pdfPath = path.join(input.repositoryRoot, prefix, pdfRelative);
-  await fs.mkdir(path.dirname(htmlPath), { recursive: true });
-  await fs.writeFile(
-    htmlPath,
-    `<html><head><link rel="canonical" href="${input.route.targetDomain}${input.document.meta.canonicalPath}"></head>` +
-    `<body><button onclick="window.print()">Print</button><a href="../../${pdfRelative}">PDF</a>` +
-    `<span>${input.document.meta.docId}</span></body></html>\n`,
-    "utf8"
-  );
+  if (!input.omitHtml) {
+    await fs.mkdir(path.dirname(htmlPath), { recursive: true });
+    await fs.writeFile(
+      htmlPath,
+      `<html><head><link rel="canonical" href="${input.route.targetDomain}${input.document.meta.canonicalPath}"></head>` +
+      `<body><button onclick="window.print()">Print</button><a href="../../${pdfRelative}">PDF</a>` +
+      `<span>${input.document.meta.docId}</span></body></html>\n`,
+      "utf8"
+    );
+  }
   if (!input.omitPdf) {
     await fs.mkdir(path.dirname(pdfPath), { recursive: true });
     await fs.writeFile(pdfPath, Buffer.concat([Buffer.from("%PDF-1.7\n"), Buffer.alloc(512, "0"), Buffer.from("\n%%EOF\n")]));

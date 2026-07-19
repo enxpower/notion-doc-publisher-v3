@@ -85,6 +85,12 @@ from reliable sources:
 Ambiguous files are never assigned to a document and never scheduled for
 deletion. They are recorded as unmanaged legacy files for owner review.
 
+If a current `Publish=true` document is valid but its expected deployed HTML or
+PDF is absent or unproven, migration does not invent a prior successful state and
+does not block unrelated healthy documents. The document is recorded privately as
+a repair candidate and the post-migration plan classifies it as `CREATE` so it
+can be republished through the normal safe apply path.
+
 When a legacy hash cannot be reconstructed from old state, the migration writes
 a documented baseline hash from the current desired Notion state and verified
 deployed output. The required post-migration idempotency check must classify

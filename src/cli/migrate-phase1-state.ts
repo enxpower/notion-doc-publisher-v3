@@ -23,6 +23,7 @@ await runCli(async () => {
     : await loadRoutedReadonlyConfigFromEnvironment(routes);
   const statePath = path.resolve(process.env.PHASE2_STATE_PATH ?? "dist/phase2-state/private/incremental-state.json");
   const summaryPath = path.resolve(process.env.PHASE2_MIGRATION_SUMMARY_PATH ?? "dist/phase2-state/private/migration-summary.json");
+  const reportPath = path.resolve(process.env.PHASE2_MIGRATION_REPORT_PATH ?? "dist/phase2-state/private/migration-report.json");
 
   const restoreReadOnly = enableNotionReadOnlyMode("migrate:phase1-state");
   try {
@@ -40,9 +41,12 @@ await runCli(async () => {
     await fs.writeFile(statePath, `${JSON.stringify(result.state, null, 2)}\n`, "utf8");
     await fs.mkdir(path.dirname(summaryPath), { recursive: true });
     await fs.writeFile(summaryPath, `${JSON.stringify(sanitizeLegacyMigrationSummary(result), null, 2)}\n`, "utf8");
+    await fs.mkdir(path.dirname(reportPath), { recursive: true });
+    await fs.writeFile(reportPath, `${JSON.stringify(result, null, 2)}\n`, "utf8");
     console.log(
       `Phase 1 state migration dry-run: migrated=${result.migratedRecordCount}, ` +
-      `unmanaged=${result.unmanagedLegacyFileCount}, errors=${result.errors.length}, warnings=${result.warnings.length}.`
+      `repair=${result.repairCandidates.length}, unmanaged=${result.unmanagedLegacyFileCount}, ` +
+      `errors=${result.errors.length}, warnings=${result.warnings.length}.`
     );
     console.log(
       `Post-migration idempotency: CREATE=${result.idempotencyPlan.counts.CREATE}, ` +
@@ -52,6 +56,7 @@ await runCli(async () => {
     );
     console.log(`Private state: ${path.relative(process.cwd(), statePath)}`);
     console.log(`Private summary: ${path.relative(process.cwd(), summaryPath)}`);
+    console.log(`Private report: ${path.relative(process.cwd(), reportPath)}`);
     if (result.errors.length > 0) {
       throw new UserFacingError("Phase 1 state migration found blocking errors. No production apply should run.");
     }

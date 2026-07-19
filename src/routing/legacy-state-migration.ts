@@ -41,6 +41,25 @@ export type LegacyMigratedDocument = {
   provenance: string[];
 };
 
+export type LegacyRepairCandidate = {
+  brand: string;
+  pageId: string;
+  docId: string;
+  visibility: string;
+  namespace: string;
+  shareToken: string;
+  expectedHtmlPath: string;
+  expectedPdfPath: string;
+  publish: boolean;
+  validationStatus: "valid" | "invalid";
+  publishedUrlExists: boolean;
+  htmlStatus: "present" | "missing";
+  pdfStatus: string;
+  classification: "CREATE";
+  reason: string;
+  provenance: string[];
+};
+
 export type UnmanagedLegacyFile = {
   brand: string;
   path: string;
@@ -56,6 +75,7 @@ export type LegacyStateMigrationResult = {
   state: IncrementalStateManifest;
   idempotencyPlan: IncrementalPlan;
   migratedDocuments: LegacyMigratedDocument[];
+  repairCandidates: LegacyRepairCandidate[];
   unmanagedLegacyFiles: UnmanagedLegacyFile[];
   errors: LegacyMigrationIssue[];
   warnings: LegacyMigrationIssue[];
@@ -75,6 +95,7 @@ export async function migrateLegacyPhase1State(input: {
   const migratedDocuments: LegacyMigratedDocument[] = [];
   const errors: LegacyMigrationIssue[] = [];
   const warnings: LegacyMigrationIssue[] = [];
+  const repairCandidates: LegacyRepairCandidate[] = [];
   const ownedByBrand = new Map<string, Set<string>>();
 
   for (const document of input.documents) {
@@ -106,6 +127,27 @@ export async function migrateLegacyPhase1State(input: {
     warnings.push(...proof.warnings);
     if (proof.errors.length > 0) {
       errors.push(...proof.errors);
+      continue;
+    }
+    if (!proof.existingPublicationProven) {
+      repairCandidates.push({
+        brand,
+        pageId: document.source.notionPageId,
+        docId: document.meta.docId,
+        visibility: document.meta.visibility,
+        namespace: document.meta.privateLinkNamespace,
+        shareToken: document.meta.shareToken,
+        expectedHtmlPath: proof.htmlPath,
+        expectedPdfPath: proof.pdfPath,
+        publish: document.meta.publish,
+        validationStatus: document.validation.errors.length > 0 ? "invalid" : "valid",
+        publishedUrlExists: Boolean(document.meta.publishedUrl?.trim()),
+        htmlStatus: proof.htmlStatus,
+        pdfStatus: proof.pdfStatus,
+        classification: "CREATE",
+        reason: "PUBLISH_CHECKED_VALID_OUTPUT_ABSENT_OR_UNPROVEN",
+        provenance: proof.provenance
+      });
       continue;
     }
 
@@ -175,15 +217,21 @@ export async function migrateLegacyPhase1State(input: {
     state,
     idempotencyPlan,
     migratedDocuments: migratedDocuments.sort((left, right) => `${left.brand}:${left.docId}`.localeCompare(`${right.brand}:${right.docId}`)),
+    repairCandidates: repairCandidates.sort((left, right) => `${left.brand}:${left.docId}`.localeCompare(`${right.brand}:${right.docId}`)),
     unmanagedLegacyFiles: unmanagedLegacyFiles.sort((left, right) => `${left.brand}:${left.path}`.localeCompare(`${right.brand}:${right.path}`)),
     errors,
     warnings
   };
 }
 
-export function sanitizeLegacyMigrationSummary(result: LegacyStateMigrationResult): Omit<LegacyStateMigrationResult, "state" | "idempotencyPlan" | "migratedDocuments" | "unmanagedLegacyFiles"> & {
+export function sanitizeLegacyMigrationSummary(result: LegacyStateMigrationResult): Omit<
+  LegacyStateMigrationResult,
+  "state" | "idempotencyPlan" | "migratedDocuments" | "repairCandidates" | "unmanagedLegacyFiles"
+> & {
   idempotencyCounts: IncrementalPlan["counts"];
   migratedByBrand: Record<string, number>;
+  repairCandidatesByBrand: Record<string, number>;
+  repairCandidatesByReason: Record<string, number>;
   unmanagedByBrand: Record<string, number>;
 } {
   return {
@@ -194,6 +242,8 @@ export function sanitizeLegacyMigrationSummary(result: LegacyStateMigrationResul
     unmanagedLegacyFileCount: result.unmanagedLegacyFileCount,
     idempotencyCounts: result.idempotencyPlan.counts,
     migratedByBrand: countBy(result.migratedDocuments.map((record) => record.brand)),
+    repairCandidatesByBrand: countBy(result.repairCandidates.map((record) => record.brand)),
+    repairCandidatesByReason: countBy(result.repairCandidates.map((record) => record.reason)),
     unmanagedByBrand: countBy(result.unmanagedLegacyFiles.map((record) => record.brand)),
     errors: result.errors.map(sanitizeIssue),
     warnings: result.warnings.map(sanitizeIssue)
@@ -233,6 +283,9 @@ async function proveDocumentOwnership(input: {
   provenance: string[];
   errors: LegacyMigrationIssue[];
   warnings: LegacyMigrationIssue[];
+  existingPublicationProven: boolean;
+  htmlStatus: "present" | "missing";
+  pdfStatus: string;
 }> {
   const brand = normalizeBrand(input.route.brand);
   const canonicalRelative = input.document.meta.canonicalPath.replace(/^\/+|\/+$/g, "");
@@ -243,16 +296,19 @@ async function proveDocumentOwnership(input: {
   const errors: LegacyMigrationIssue[] = [];
   const warnings: LegacyMigrationIssue[] = [];
   const provenance: string[] = [];
+  let htmlStatus: "present" | "missing" = "missing";
+  let pdfStatus = "missing";
 
   if (!canonicalRelative || !isSafeRelativePublicPath(htmlPath) || !isSafeRelativePublicPath(pdfPath)) {
     errors.push(issue(brand, "UNSAFE_EXPECTED_PATH", "Expected document path is not safe.", input.document.meta.docId));
-    return { htmlPath, pdfPath, ownedFiles: [], provenance, errors, warnings };
+    return { htmlPath, pdfPath, ownedFiles: [], provenance, errors, warnings, existingPublicationProven: false, htmlStatus, pdfStatus };
   }
 
   const html = await readOwnedTextFile(input.repositoryRoot, htmlPath);
   if (!html) {
-    errors.push(issue(brand, "MISSING_DEPLOYED_HTML", "Expected deployed HTML route is missing.", input.document.meta.docId));
+    warnings.push(issue(brand, "MISSING_DEPLOYED_HTML_CREATE_REQUIRED", "Expected deployed HTML route is missing; document will be treated as CREATE.", input.document.meta.docId));
   } else {
+    htmlStatus = "present";
     provenance.push("exact-canonical-token-path");
     if (html.includes(input.document.meta.docId)) {
       provenance.push("html-metadata-doc-id");
@@ -269,8 +325,10 @@ async function proveDocumentOwnership(input: {
 
   const pdf = await inspectPdf(input.repositoryRoot, pdfPath);
   if (!pdf.ok) {
-    errors.push(issue(brand, pdf.code, pdf.message, input.document.meta.docId));
+    pdfStatus = pdf.code;
+    warnings.push(issue(brand, `${pdf.code}_CREATE_REQUIRED`, `${pdf.message} Document will be treated as CREATE.`, input.document.meta.docId));
   } else {
+    pdfStatus = "present-valid";
     provenance.push("doc-id-pdf-path");
   }
 
@@ -293,7 +351,10 @@ async function proveDocumentOwnership(input: {
     ownedFiles: [...new Set(ownedFiles)].sort(),
     provenance: [...new Set(provenance)].sort(),
     errors,
-    warnings
+    warnings,
+    existingPublicationProven: htmlStatus === "present" && pdfStatus === "present-valid",
+    htmlStatus,
+    pdfStatus
   };
 }
 
