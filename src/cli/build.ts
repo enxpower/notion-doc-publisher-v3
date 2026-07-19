@@ -1,16 +1,18 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { copyDocumentAssets, copyStyles } from "../assets/copy-assets.js";
-import { loadConfigOrThrow, runCli } from "../config.js";
+import { loadConfigOrThrow, runCli, type AppConfig } from "../config.js";
 import { VALID_PRIVATE_LINK_NAMESPACES, isPrivateLinkVisibility, normalizeVisibility } from "../model/document.js";
 import { renderDocumentHtml, renderDocsRootHtml, renderIndexHtml, renderNamespaceRootHtml } from "../render/render-html.js";
 import { autoFillDocuments, createReport, loadDocuments, publishableDocuments, skippedDueToErrors, validateLoadedDocuments, writeJson } from "./shared.js";
 import { isPublicIndexListed, isPublishableCandidate } from "../validate/validate.js";
+import { computeBrandCanonicalUrl, resolveBrandRoute, type BrandRoute } from "../routing/brand-routing.js";
+import { loadBrandRoutes } from "../routing/routes.js";
 
 await runCli(async () => {
   const config = loadConfigOrThrow();
+  const brandRoutes = await loadBrandRoutes();
   await fs.mkdir("dist", { recursive: true });
-  await copyStyles("dist");
 
   // Prune stale document subdirectories from all namespace paths before writing fresh output
   for (const ns of ["docs", "clients", "partners", "internal"]) {
@@ -75,6 +77,7 @@ await runCli(async () => {
   }
 
   const published = publishableDocuments(documents, config);
+  await copyStyles("dist", staticAssetsForDocuments(published, config));
 
   // Write document pages
   for (const document of published) {
@@ -84,8 +87,9 @@ await runCli(async () => {
     }
     const segments = document.meta.canonicalPath.replace(/^\/|\/$/g, "").split("/");
     const outputDir = path.join("dist", ...segments);
+    const renderConfig = configForDocumentRoute(config, brandRoutes, document);
     await fs.mkdir(outputDir, { recursive: true });
-    await fs.writeFile(path.join(outputDir, "index.html"), await renderDocumentHtml(document, config), "utf8");
+    await fs.writeFile(path.join(outputDir, "index.html"), await renderDocumentHtml(document, renderConfig), "utf8");
 
     const vis = document.meta.visibility.trim().toLowerCase();
     const vNorm = normalizeVisibility(vis);
@@ -100,7 +104,7 @@ await runCli(async () => {
       const legacySlug = `${document.meta.docId}-${document.meta.shareToken}`;
       const legacyDir = path.join("dist", ns, legacySlug);
       await fs.mkdir(legacyDir, { recursive: true });
-      await fs.writeFile(path.join(legacyDir, "index.html"), await renderDocumentHtml(document, config), "utf8");
+      await fs.writeFile(path.join(legacyDir, "index.html"), await renderDocumentHtml(document, renderConfig), "utf8");
       console.warn(
         `[WARN] ${document.meta.docId}: Also written to legacy URL /${ns}/${legacySlug}/ (LEGACY_PRIVATE_DOC_ID_URLS=true). ` +
         `DOC_ID is exposed in this path and must not be shared externally.`
@@ -111,7 +115,7 @@ await runCli(async () => {
     if (vNorm === "unlisted" && config.legacyUnlistedDocsPath && document.meta.docId) {
       const legacyDir = path.join("dist", "docs", document.meta.docId);
       await fs.mkdir(legacyDir, { recursive: true });
-      await fs.writeFile(path.join(legacyDir, "index.html"), await renderDocumentHtml(document, config), "utf8");
+      await fs.writeFile(path.join(legacyDir, "index.html"), await renderDocumentHtml(document, renderConfig), "utf8");
       console.warn(
         `[WARN] ${document.meta.docId}: Also written to legacy /docs/${document.meta.docId}/ (LEGACY_UNLISTED_DOCS_PATH=true). ` +
         `Sequential DOC_IDs are guessable. Do not share these URLs with clients.`
@@ -154,14 +158,19 @@ await runCli(async () => {
   );
 
   // sitemap.xml — only Public + Portal Listed documents
-  if (config.targetSiteDomain && indexListed.length > 0) {
-    const domain = config.targetSiteDomain.replace(/\/+$/, "");
+  if (indexListed.length > 0) {
     const urls = indexListed
       .filter((doc) => doc.meta.canonicalPath)
       .map((doc) => {
         const lastmod = doc.source.lastEditedTime ?? doc.source.createdTime;
         const modTag = lastmod ? `\n      <lastmod>${lastmod.slice(0, 10)}</lastmod>` : "";
-        return `  <url>\n    <loc>${domain}${doc.meta.canonicalPath}</loc>${modTag}\n  </url>`;
+        const url = computeBrandCanonicalUrl({
+          routes: brandRoutes,
+          brandLabel: doc.meta.brand.label,
+          canonicalPath: doc.meta.canonicalPath,
+          docId: doc.meta.docId
+        });
+        return `  <url>\n    <loc>${url}</loc>${modTag}\n  </url>`;
       })
       .join("\n");
     await fs.writeFile(
@@ -175,3 +184,23 @@ await runCli(async () => {
   await writeJson("dist/reports/build-report.json", buildReport);
   console.log(`Built ${published.length} document(s) into dist/. Skipped ${skipped.length} document(s) with errors.`);
 });
+
+function configForDocumentRoute(config: AppConfig, routes: BrandRoute[], document: { meta: { brand: { label: string } } }): AppConfig {
+  const route = resolveBrandRoute(routes, document.meta.brand.label);
+  return {
+    ...config,
+    targetSiteDomain: route.targetDomain
+  };
+}
+
+function staticAssetsForDocuments(documents: Array<{ meta: { brand: { label: string } } }>, config: AppConfig): string[] {
+  const assets = new Set<string>(["favicon.ico", "favicon.png"]);
+  for (const document of documents) {
+    const profile = config.brandProfiles[document.meta.brand.label];
+    assets.add(profile?.shareImage ?? "share-preview.png");
+    if (profile?.favicon) {
+      assets.add(profile.favicon);
+    }
+  }
+  return [...assets];
+}

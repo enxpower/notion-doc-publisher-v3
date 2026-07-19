@@ -98,11 +98,13 @@ export type BuildReport = {
   documents: Array<{
     pageId: string;
     docId: string;
+    brand: string;
     title: string;
     path: string;
     status: string;
     visibility: string;
     publish: boolean;
+    publishedUrl?: string;
   }>;
   errors: ValidationIssue[];
   warnings: ValidationIssue[];

@@ -122,11 +122,13 @@ export function createReport(documents: DocumentModel[]): BuildReport {
     documents: documents.map((document) => ({
       pageId: document.source.notionPageId,
       docId: document.meta.docId,
+      brand: document.meta.brand.label,
       title: document.meta.title,
       path: document.meta.canonicalPath,
       status: document.meta.status,
       visibility: document.meta.visibility,
-      publish: document.meta.publish
+      publish: document.meta.publish,
+      publishedUrl: document.meta.publishedUrl
     })),
     errors: issues.errors,
     warnings: issues.warnings

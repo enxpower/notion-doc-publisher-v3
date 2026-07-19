@@ -15,7 +15,7 @@ Production company documentation repositories:
 | Scope | Repository | Publish URL |
 |---|---|---|
 | EnergizeOS | `enxpower/docs-energize-v2` | `docs.energizeos.com` |
-| ARCBOS | `enxpower/docs-arcbos-v2` | `ref.arcbos.com` |
+| ARCBOS | `enxpower/docs-arcbos-v2` | `docs.arcbos.com` |
 | AGI&M | `enxpower/agim-docs` | `docs.agim.ca` |
 
 Preview/test target for this repository:

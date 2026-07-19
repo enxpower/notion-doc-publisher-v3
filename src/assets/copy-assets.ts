@@ -3,7 +3,7 @@ import path from "node:path";
 import { UserFacingError } from "../config.js";
 import type { DocumentModel } from "../model/document.js";
 
-export async function copyStyles(distDir = "dist"): Promise<void> {
+export async function copyStyles(distDir = "dist", staticAssets?: Iterable<string>): Promise<void> {
   await fs.mkdir(path.join(distDir, "assets", "css"), { recursive: true });
   await fs.copyFile("styles/screen.css", path.join(distDir, "assets", "css", "screen.css"));
   await fs.copyFile("styles/print.css", path.join(distDir, "assets", "css", "print.css"));
@@ -12,13 +12,14 @@ export async function copyStyles(distDir = "dist"): Promise<void> {
   try {
     const sourceDir = "assets";
     const files = await fs.readdir(sourceDir);
+    const allowedStaticAssets = staticAssets ? new Set(staticAssets) : undefined;
     for (const file of files) {
-      if (
+      const legacyDefaultAsset =
         file === "share-preview.png" ||
         /^.+-share-preview\.png$/.test(file) ||
         file === "favicon.ico" ||
-        file === "favicon.png"
-      ) {
+        file === "favicon.png";
+      if ((allowedStaticAssets && allowedStaticAssets.has(file)) || (!allowedStaticAssets && legacyDefaultAsset)) {
         try {
           await fs.copyFile(path.join(sourceDir, file), path.join(distDir, "assets", file));
         } catch {

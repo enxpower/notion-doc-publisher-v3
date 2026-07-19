@@ -2,8 +2,8 @@
   "ARCBOS": {
     "brand": "ARCBOS",
     "targetRepository": "enxpower/docs-arcbos-v2",
-    "targetDomain": "https://ref.arcbos.com",
-    "cname": "ref.arcbos.com",
+    "targetDomain": "https://docs.arcbos.com",
+    "cname": "docs.arcbos.com",
     "routeId": "arcbos",
     "presentationProfileKey": "ARCBOS",
     "allowedUrlNamespaces": ["docs", "clients", "partners", "internal"],

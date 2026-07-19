@@ -12,6 +12,8 @@ import type { AppConfig } from "../config.js";
 import { NotionClient } from "../notion/client.js";
 import { enableNotionMutationAllowList } from "../notion/read-only-guard.js";
 import { NotionWriteback } from "../notion/writeback.js";
+import { computeBrandCanonicalUrl } from "../routing/brand-routing.js";
+import { loadBrandRoutes } from "../routing/routes.js";
 
 type RequestCall = {
   path: string;
@@ -158,21 +160,134 @@ test("Notion mutation allow-list permits only routed URL writeback operation", a
   assert.deepEqual(Object.keys(calls[0]!.properties), ["PUBLISHED_URL"]);
 });
 
-test("writeback-preview composes success URL from supplied base URL and canonical path", async () => {
+test("brand-aware canonical URL resolver covers ARCBOS and ENERGIZE private routes", async () => {
+  const routes = await loadBrandRoutes();
+
+  assert.equal(
+    computeBrandCanonicalUrl({
+      routes,
+      brandLabel: " ARCBOS ",
+      canonicalPath: "/clients/arcbosclienttoken/",
+      docId: "ARCBOS-MEM-2607-0026"
+    }),
+    "https://docs.arcbos.com/clients/arcbosclienttoken/"
+  );
+  assert.equal(
+    computeBrandCanonicalUrl({
+      routes,
+      brandLabel: "ARCBOS",
+      canonicalPath: "/internal/arcbosinternaltoken/",
+      docId: "ARCBOS-MEM-2607-0027"
+    }),
+    "https://docs.arcbos.com/internal/arcbosinternaltoken/"
+  );
+  assert.equal(
+    computeBrandCanonicalUrl({
+      routes,
+      brandLabel: "ENERGIZE",
+      canonicalPath: "/clients/energizeclienttoken/",
+      docId: "ENERGIZE-MEM-2607-0029"
+    }),
+    "https://docs.energizeos.com/clients/energizeclienttoken/"
+  );
+  assert.equal(
+    computeBrandCanonicalUrl({
+      routes,
+      brandLabel: " energize ",
+      canonicalPath: "/internal/energizeinternaltoken/",
+      docId: "ENERGIZE-MEM-2607-0028"
+    }),
+    "https://docs.energizeos.com/internal/energizeinternaltoken/"
+  );
+});
+
+test("brand-aware canonical URL resolver fails closed and blocks cross-brand public paths", async () => {
+  const routes = await loadBrandRoutes();
+
+  assert.throws(
+    () => computeBrandCanonicalUrl({ routes, brandLabel: "", canonicalPath: "/clients/token/", docId: "ARCBOS-MEM-2607-0026" }),
+    /Brand is missing/
+  );
+  assert.throws(
+    () => computeBrandCanonicalUrl({ routes, brandLabel: "UNKNOWN", canonicalPath: "/clients/token/", docId: "UNKNOWN-MEM-2607-0026" }),
+    /unknown Brand UNKNOWN/
+  );
+  assert.throws(
+    () => computeBrandCanonicalUrl({
+      routes,
+      brandLabel: "ENERGIZE",
+      canonicalPath: "/docs/ARCBOS-MEM-2607-0026/",
+      docId: "ARCBOS-MEM-2607-0026"
+    }),
+    /does not match ENERGIZE/
+  );
+});
+
+test("brand-aware private URLs preserve token namespace and do not expose DOC_ID", async () => {
+  const routes = await loadBrandRoutes();
+  const doc = {
+    docId: "ENERGIZE-MEM-2607-0029",
+    shareToken: "energizeclienttoken",
+    namespace: "clients",
+    canonicalPath: "/clients/energizeclienttoken/"
+  };
+  const before = structuredClone(doc);
+  const url = computeBrandCanonicalUrl({
+    routes,
+    brandLabel: "ENERGIZE",
+    canonicalPath: doc.canonicalPath,
+    docId: doc.docId
+  });
+
+  assert.deepEqual(doc, before);
+  assert.ok(url.startsWith("https://docs.energizeos.com/clients/"));
+  assert.ok(!url.includes(doc.docId), "private URL must not expose DOC_ID");
+  assert.equal(doc.shareToken, before.shareToken);
+  assert.equal(doc.namespace, before.namespace);
+});
+
+test("writeback-preview uses brand-aware routes, not PREVIEW_BASE_URL, for success URLs", async () => {
   const src = await fs.readFile(path.resolve("src/cli/writeback-preview.ts"), "utf8");
 
   assert.ok(
-    src.includes("const url = publishedUrl(preview.baseUrl, document.path);"),
-    "writeback-preview must derive the success URL from preview base URL plus document canonical path"
+    src.includes("loadBrandRoutes"),
+    "writeback-preview must load committed brand routes"
   );
   assert.ok(
-    src.includes("return `${baseUrl}${canonicalPath}`;"),
-    "publishedUrl must concatenate the supplied base URL and canonical path"
+    src.includes("computeBrandCanonicalUrl"),
+    "writeback-preview must use the authoritative brand-aware canonical URL resolver"
   );
   assert.ok(
-    src.includes("await writeback.updateDocumentFailed(document.pageId, \"Preview deployment failed after static build.\", preview.runId);"),
+    !src.includes("publishedUrl(preview.baseUrl"),
+    "writeback-preview must not derive success URLs from global PREVIEW_BASE_URL"
+  );
+  assert.ok(
+    !src.includes("return `${baseUrl}${canonicalPath}`;"),
+    "writeback-preview must not concatenate a single base URL with every canonical path"
+  );
+  assert.ok(
+    src.includes("Preview deployment failed after static build."),
     "deploy failure branch must mark the page failed instead of writing success"
   );
+  assert.ok(
+    src.includes("updatePageOnce"),
+    "writeback-preview must avoid duplicate Notion page mutations"
+  );
+});
+
+test("Preview Publish workflow still calls the corrected writeback entry point", async () => {
+  const workflow = await fs.readFile(path.resolve(".github/workflows/preview-publish.yml"), "utf8");
+  const rawPackage = await fs.readFile(path.resolve("package.json"), "utf8");
+  const pkg = JSON.parse(rawPackage) as { scripts: Record<string, string> };
+  const src = await fs.readFile(path.resolve("src/cli/writeback-preview.ts"), "utf8");
+
+  assert.ok(workflow.includes("run: npm run ci:writeback"));
+  assert.ok(
+    workflow.includes("ALLOWED_BRANDS: ${{ vars.ALLOWED_BRANDS || secrets.ALLOWED_BRANDS || 'ARCBOS' }}"),
+    "same-repository Pages deployment must default to ARCBOS unless an owner-configured brand filter exists"
+  );
+  assert.equal(pkg.scripts["ci:writeback"], "tsc && node .tmp/cli/writeback-preview.js");
+  assert.ok(src.includes("computeBrandCanonicalUrl"));
 });
 
 /* ---------------- Single database contract ---------------- */

@@ -51,6 +51,7 @@ jobs:
       DOCUMENT_TYPE_TOKENS_JSON: ${{ vars.DOCUMENT_TYPE_TOKENS_JSON || secrets.DOCUMENT_TYPE_TOKENS_JSON }}
       PREVIEW_DEPLOY_ENABLED: ${{ vars.PREVIEW_DEPLOY_ENABLED || secrets.PREVIEW_DEPLOY_ENABLED }}
       PREVIEW_BASE_URL: ${{ vars.PREVIEW_BASE_URL || secrets.PREVIEW_BASE_URL }}
+      ALLOWED_BRANDS: ${{ vars.ALLOWED_BRANDS || secrets.ALLOWED_BRANDS || 'ARCBOS' }}
 
     steps:
       - name: Checkout
@@ -134,6 +135,60 @@ jobs:
           PDF_REQUIRED: ${{ vars.PDF_REQUIRED || 'false' }}
         run: npm run pdf:site
 
+      - name: Prepare public Pages artifact
+        if: steps.preview.outputs.enabled == 'true' && steps.build.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf dist-pages
+          mkdir dist-pages
+          cp -R dist/. dist-pages/
+
+          find dist-pages -type f \( \
+            -name '*.typ' \
+            -o -name '.env' \
+            -o -name '.env.*' \
+            -o -iname '*backup*' \
+            -o -iname '*audit*' \
+            -o -iname '*correlation*' \
+            -o -iname '*diagnostic*' \
+            -o -path '*/reports/*' \
+            -o -path '*/routes/*' \
+            -o -path '*/routes-readonly/*' \
+            -o -path '*/routed-url-writeback/*' \
+            -o -path '*/diagnostics/*' \
+            -o -path '*/reconciliation/*' \
+            -o -path '*/security-cleanup/*' \
+          \) -delete
+          find dist-pages -type d -empty -delete
+
+          blocked_count="$(find dist-pages -type f \( \
+            -name '*.typ' \
+            -o -name '.env' \
+            -o -name '.env.*' \
+            -o -iname '*backup*' \
+            -o -iname '*audit*' \
+            -o -iname '*correlation*' \
+            -o -iname '*diagnostic*' \
+            -o -path '*/reports/*' \
+            -o -path '*/routes/*' \
+            -o -path '*/routes-readonly/*' \
+            -o -path '*/routed-url-writeback/*' \
+            -o -path '*/diagnostics/*' \
+            -o -path '*/reconciliation/*' \
+            -o -path '*/security-cleanup/*' \
+          \) | wc -l | tr -d ' ')"
+          if [ "$blocked_count" != "0" ]; then
+            echo "Private or intermediate files remain in Pages artifact: $blocked_count"
+            exit 1
+          fi
+
+          secret_match_count="$({ grep -RIE 'github_pat_|gh[pousr]_|ntn_|Bearer[[:space:]]+[A-Za-z0-9._-]{20,}' dist-pages || true; } | wc -l | tr -d ' ')"
+          if [ "$secret_match_count" != "0" ]; then
+            echo "Credential-shaped content blocked from Pages artifact: $secret_match_count"
+            exit 1
+          fi
+
       - name: Configure GitHub Pages
         if: steps.preview.outputs.enabled == 'true' && steps.build.outcome == 'success'
         uses: actions/configure-pages@v5
@@ -142,7 +197,7 @@ jobs:
         if: steps.preview.outputs.enabled == 'true' && steps.build.outcome == 'success'
         uses: actions/upload-pages-artifact@v3
         with:
-          path: dist
+          path: dist-pages
 
       - name: Deploy preview to GitHub Pages
         id: deploy

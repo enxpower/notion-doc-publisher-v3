@@ -30,7 +30,7 @@ test("brand route config contains exactly the four normalized dry-run brands", a
 
   assert.deepEqual(brands, ["AGIM", "ARCBOS", "ENERGIZE", "GONG"]);
   assert.equal(routes.find((route) => route.brand === "ARCBOS")!.targetRepository, "enxpower/docs-arcbos-v2");
-  assert.equal(routes.find((route) => route.brand === "ARCBOS")!.targetDomain, "https://ref.arcbos.com");
+  assert.equal(routes.find((route) => route.brand === "ARCBOS")!.targetDomain, "https://docs.arcbos.com");
   assert.equal(routes.find((route) => route.brand === "ENERGIZE")!.targetRepository, "enxpower/docs-energize-v2");
   assert.equal(routes.find((route) => route.brand === "ENERGIZE")!.targetDomain, "https://docs.energizeos.com");
   assert.equal(routes.find((route) => route.brand === "AGIM")!.targetRepository, "enxpower/agim-docs");
@@ -54,8 +54,8 @@ test("brand route config rejects duplicate route identifiers", async () => {
 test("brand route config rejects duplicate repository/domain combinations", async () => {
   const configPath = await tempRouteConfig((config) => {
     config.ENERGIZE.targetRepository = "enxpower/docs-arcbos-v2";
-    config.ENERGIZE.targetDomain = "https://ref.arcbos.com";
-    config.ENERGIZE.cname = "ref.arcbos.com";
+    config.ENERGIZE.targetDomain = "https://docs.arcbos.com";
+    config.ENERGIZE.cname = "docs.arcbos.com";
   });
 
   await assert.rejects(() => loadBrandRoutes(configPath), /Duplicate target repository\/domain combination/);
@@ -396,7 +396,7 @@ test("routed output content is isolated per brand", async () => {
   assert.ok(!arcbosFiles.includes("assets/agim-share-preview.png"));
 });
 
-test("existing npm run build behavior remains unchanged and routed dry-run command is separate", async () => {
+test("existing npm run build command is unchanged and legacy build uses brand-aware canonical metadata", async () => {
   const raw = await fs.readFile(path.resolve("package.json"), "utf8");
   const pkg = JSON.parse(raw) as { scripts: Record<string, string> };
   const buildSrc = await fs.readFile(path.resolve("src/cli/build.ts"), "utf8");
@@ -404,7 +404,9 @@ test("existing npm run build behavior remains unchanged and routed dry-run comma
   assert.equal(pkg.scripts.build, "tsc && node .tmp/cli/security-lint.js && node .tmp/cli/build.js");
   assert.equal(pkg.scripts["build:routed:dry-run"], "tsc && node .tmp/cli/build-routed-dry-run.js");
   assert.ok(!buildSrc.includes("routed-build"));
-  assert.ok(!buildSrc.includes("brand-routing"));
+  assert.ok(buildSrc.includes("computeBrandCanonicalUrl"));
+  assert.ok(buildSrc.includes("resolveBrandRoute"));
+  assert.ok(buildSrc.includes('copyStyles("dist", staticAssetsForDocuments(published, config))'));
 });
 
 async function buildFixture(input: BuildInput = {}): Promise<{ result: RoutedBuildResult; outputBaseRoot: string }> {
