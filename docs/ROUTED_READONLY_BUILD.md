@@ -28,6 +28,7 @@ dist/routes-readonly/ARCBOS/site
 dist/routes-readonly/ENERGIZE/site
 dist/routes-readonly/AGIM/site
 dist/routes-readonly/GONG/site
+dist/routes-readonly/{BRAND}/site/pdf/{DOC_ID}.pdf
 dist/routes-readonly/{BRAND}/manifest.json
 dist/routes-readonly/_audit/read-only-audit.json
 dist/routes-readonly/routed-build-summary.json
@@ -49,6 +50,7 @@ NOTION_DATABASE_ID single database
   -> readonly persisted-field requirements
   -> Brand route grouping
   -> isolated per-brand local site roots
+  -> routed PDF rendering from the accepted per-brand document objects
   -> public-safe manifests
   -> private local audit report
 ```
@@ -94,7 +96,8 @@ command: statuses `Approved`, `Published`, and `Final`; document types
 Public manifests are written outside each `site` root at
 `dist/routes-readonly/{BRAND}/manifest.json`. They omit Notion page IDs,
 database IDs, Notion URLs, local absolute paths, environment values, stack
-traces, credentials, and secrets.
+traces, credentials, secrets, private Share Tokens, and private canonical URLs.
+Private route paths are represented only as redacted placeholders.
 
 The private audit report is written to
 `dist/routes-readonly/_audit/read-only-audit.json`, outside every deployable
@@ -103,9 +106,31 @@ gitignored.
 
 ## PDF Handling
 
-Stage 6 does not independently reload Notion for PDFs. Public manifests include
-the per-brand PDF plan derived from the same document set used for HTML.
-Full routed PDF rendering remains deferred.
+Stage 9 renders routed PDFs locally from the exact accepted per-brand document
+objects used for HTML. The command does not reload Notion for PDFs and does not
+use the PDF queue or PDF writeback path.
+
+The routed path reuses the existing Typst PDF engine. Intermediate Typst files
+are written to an internal work directory outside deployable `site` roots. Only
+compiled PDFs are copied into each brand site root:
+
+```text
+dist/routes-readonly/{BRAND}/site/pdf/{DOC_ID}.pdf
+```
+
+Each generated PDF is checked before it is marked successful:
+
+- file exists
+- byte size is above the routed minimum
+- header starts with `%PDF-`
+- at least one page marker is detectable
+- path remains inside the same brand site root
+- the rendered HTML download link resolves to the same relative PDF path
+
+Failure policy is brand-local. A PDF failure for one document marks that brand
+manifest as failed or blocked, blocks that brand's deployment dry-run plan, and
+does not delete, overwrite, or mutate another brand's successful output. Notion
+remains read-only for the entire command.
 
 ## Disabled
 

@@ -11,7 +11,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import type { AppConfig } from "../config.js";
-import type { DocumentModel } from "../model/document.js";
+import { emptyValidation, type DocumentModel } from "../model/document.js";
 import { NotionClient } from "../notion/client.js";
 import { enableNotionReadOnlyMode } from "../notion/read-only-guard.js";
 import { NotionWriteback } from "../notion/writeback.js";
@@ -23,12 +23,19 @@ import {
   loadRoutedReadonlyConfigFromEnvironment,
   type RoutedReadonlyBuildResult
 } from "../routing/routed-readonly.js";
+import {
+  createFixtureRoutedPdfRenderer,
+  MIN_ROUTED_PDF_BYTES,
+  type RoutedPdfRenderer,
+  type RoutedPdfRendererInput
+} from "../routing/routed-pdf.js";
 import { loadBrandRoutes, routesWithOutputBase } from "../routing/routes.js";
 
 type BuildInput = {
   documents?: DocumentModel[];
   config?: AppConfig;
   outputBaseRoot?: string;
+  pdfRenderer?: RoutedPdfRenderer;
 };
 
 test("routed readonly command is separate and existing build commands remain unchanged", async () => {
@@ -148,14 +155,17 @@ test("mocked mutation attempt inside readonly command fails the command", async 
 
 test("one mocked database load feeds all readonly brand groups", async () => {
   let loadCount = 0;
+  const pdfInputs: RoutedPdfRendererInput[] = [];
   const { result } = await buildReadonlyFixture({
-    documents: routedDryRunDocuments()
+    documents: routedDryRunDocuments(),
+    pdfRenderer: createFixtureRoutedPdfRenderer({ onRender: (input) => pdfInputs.push(input) })
   }, async () => {
     loadCount += 1;
     return routedDryRunDocuments();
   });
 
   assert.equal(loadCount, 1);
+  assert.equal(pdfInputs.length, 4);
   assert.deepEqual(result.manifests.map((manifest) => manifest.brand).sort(), ["AGIM", "ARCBOS", "ENERGIZE", "GONG"]);
 });
 
@@ -170,6 +180,151 @@ test("valid ARCBOS, ENERGIZE, AGIM, and GONG records build into separate readonl
     assert.ok(await exists(path.join(outputBaseRoot, manifest.outputRoot, "index.html")), `${brand} readonly output missing`);
   }
   assert.equal(result.manifests.find((item) => item.brand === "GONG")!.deploymentPlan.ok, false);
+});
+
+test("readonly routed build renders same-brand PDFs and records integrity in public manifests", async () => {
+  const { result, outputBaseRoot } = await buildReadonlyFixture();
+
+  for (const manifest of result.manifests) {
+    assert.equal(manifest.plannedPdfCount, 1, manifest.brand);
+    assert.equal(manifest.successfulPdfCount, 1, manifest.brand);
+    assert.equal(manifest.failedPdfCount, 0, manifest.brand);
+    assert.equal(manifest.pdfResults.length, 1, manifest.brand);
+    assert.equal(manifest.pdfResults[0]!.status, "success", manifest.brand);
+    assert.ok((manifest.pdfResults[0]!.byteSize ?? 0) >= MIN_ROUTED_PDF_BYTES, manifest.brand);
+    assert.ok((manifest.pdfResults[0]!.pageCount ?? 0) >= 1, manifest.brand);
+
+    const document = manifest.documents[0]!;
+    const pdfPath = path.join(outputBaseRoot, manifest.outputRoot, document.pdfPath!);
+    const pdfHeader = await fs.readFile(pdfPath, { encoding: "latin1" });
+    assert.equal(pdfHeader.startsWith("%PDF-"), true, manifest.brand);
+
+    const sourceDocument = routedDryRunDocuments().find((item) => item.meta.brand.label === manifest.brand)!;
+    const html = await fs.readFile(
+      path.join(outputBaseRoot, manifest.outputRoot, canonicalPathToHtmlPath(sourceDocument.meta.canonicalPath)),
+      "utf8"
+    );
+    assert.ok(html.includes(`href="../../${document.pdfPath}"`), manifest.brand);
+    assert.equal(await exists(path.join(outputBaseRoot, manifest.outputRoot, `${document.docId}.typ`)), false, manifest.brand);
+  }
+});
+
+test("readonly PDF renderer receives accepted per-brand documents without reloading Notion", async () => {
+  let loadCount = 0;
+  const rendered: Array<{ brand: string; docId: string; profile: string | null | undefined }> = [];
+  const documents = [
+    ...routedDryRunDocuments(),
+    makeDoc("ARCBOS", "page-arcbos-extra", {
+      docId: "ARCBOS-SPEC-2606-0100",
+      canonicalPath: "/docs/ARCBOS-SPEC-2606-0100/"
+    })
+  ];
+  const { result } = await buildReadonlyFixture({
+    documents,
+    pdfRenderer: createFixtureRoutedPdfRenderer({
+      onRender: (input) => rendered.push({
+        brand: input.route.brand,
+        docId: input.document.meta.docId,
+        profile: input.route.presentationProfileKey
+      })
+    })
+  }, async () => {
+    loadCount += 1;
+    return documents;
+  });
+
+  assert.equal(loadCount, 1);
+  assert.equal(result.manifests.find((manifest) => manifest.brand === "ARCBOS")!.successfulPdfCount, 2);
+  assert.equal(rendered.length, 5);
+  assert.deepEqual(rendered.filter((item) => item.brand === "ARCBOS").map((item) => item.profile), ["ARCBOS", "ARCBOS"]);
+  assert.equal(rendered.find((item) => item.brand === "ENERGIZE")!.profile, "ENERGIZE");
+  assert.equal(rendered.find((item) => item.brand === "AGIM")!.profile, "AGIM");
+  assert.equal(rendered.find((item) => item.brand === "GONG")!.profile, null);
+});
+
+test("PDF render failure blocks only the affected readonly brand", async () => {
+  const documents = routedDryRunDocuments();
+  const failingDocId = documents[1]!.meta.docId;
+  const { result, outputBaseRoot } = await buildReadonlyFixture({
+    documents,
+    pdfRenderer: createFixtureRoutedPdfRenderer({ failDocIds: new Set([failingDocId]) })
+  });
+  const arcbos = result.manifests.find((manifest) => manifest.brand === "ARCBOS")!;
+  const energize = result.manifests.find((manifest) => manifest.brand === "ENERGIZE")!;
+
+  assert.equal(arcbos.buildStatus, "success");
+  assert.equal(arcbos.successfulPdfCount, 1);
+  assert.ok(await exists(path.join(outputBaseRoot, arcbos.outputRoot, arcbos.documents[0]!.pdfPath!)));
+  assert.equal(energize.buildStatus, "failed");
+  assert.equal(energize.deploymentPlan.ok, false);
+  assert.equal(energize.successfulPdfCount, 0);
+  assert.equal(energize.failedPdfCount, 1);
+  assert.ok(energize.errors.some((error) => error.code === "PDF_RENDER_FAILED"));
+});
+
+test("zero-byte and corrupt routed PDFs fail integrity checks", async () => {
+  const documents = routedDryRunDocuments();
+  const zeroByteDocId = documents[0]!.meta.docId;
+  const corruptDocId = documents[2]!.meta.docId;
+  const { result } = await buildReadonlyFixture({
+    documents,
+    pdfRenderer: createFixtureRoutedPdfRenderer({
+      zeroByteDocIds: new Set([zeroByteDocId]),
+      corruptDocIds: new Set([corruptDocId])
+    })
+  });
+  const arcbos = result.manifests.find((manifest) => manifest.brand === "ARCBOS")!;
+  const agim = result.manifests.find((manifest) => manifest.brand === "AGIM")!;
+  const energize = result.manifests.find((manifest) => manifest.brand === "ENERGIZE")!;
+
+  assert.equal(arcbos.buildStatus, "failed");
+  assert.ok(arcbos.errors.some((error) => error.code === "PDF_TOO_SMALL"));
+  assert.equal(agim.buildStatus, "failed");
+  assert.ok(agim.errors.some((error) => error.code === "PDF_INVALID_HEADER"));
+  assert.equal(energize.buildStatus, "success");
+});
+
+test("routed PDF output cannot be redirected into another brand route root", async () => {
+  const documents = routedDryRunDocuments();
+  const escapingDocId = documents[0]!.meta.docId;
+  const { result } = await buildReadonlyFixture({
+    documents,
+    pdfRenderer: createFixtureRoutedPdfRenderer({ crossBrandDocIds: new Set([escapingDocId]) })
+  });
+  const arcbos = result.manifests.find((manifest) => manifest.brand === "ARCBOS")!;
+  const energize = result.manifests.find((manifest) => manifest.brand === "ENERGIZE")!;
+
+  assert.equal(arcbos.buildStatus, "failed");
+  assert.equal(arcbos.successfulPdfCount, 0);
+  assert.equal(arcbos.failedPdfCount, 1);
+  assert.ok(arcbos.errors.some((error) => error.code === "PDF_MISSING"));
+  assert.equal(arcbos.files.includes(arcbos.documents[0]!.pdfPath!), false);
+  assert.equal(energize.buildStatus, "success");
+});
+
+test("unsupported routed PDF presentation profile blocks only that brand", async () => {
+  const documents = routedDryRunDocuments();
+  const { result } = await buildReadonlyFixture({
+    documents,
+    pdfRenderer: createFixtureRoutedPdfRenderer({ unsupportedProfileKeys: new Set(["AGIM"]) })
+  });
+  const agim = result.manifests.find((manifest) => manifest.brand === "AGIM")!;
+  const arcbos = result.manifests.find((manifest) => manifest.brand === "ARCBOS")!;
+
+  assert.equal(agim.buildStatus, "failed");
+  assert.ok(agim.errors.some((error) => error.code === "PDF_RENDER_FAILED"));
+  assert.equal(arcbos.buildStatus, "success");
+});
+
+test("GONG routed PDFs remain local with no confirmed presentation profile or deployment target", async () => {
+  const { result } = await buildReadonlyFixture();
+  const gong = result.manifests.find((manifest) => manifest.brand === "GONG")!;
+
+  assert.equal(gong.presentationProfileKey, null);
+  assert.equal(gong.pdfResults[0]!.presentationProfileKey, null);
+  assert.equal(gong.successfulPdfCount, 1);
+  assert.equal(gong.deploymentPlan.ok, false);
+  assert.ok(gong.deploymentPlan.errors.some((error) => error.includes("No confirmed GONG target repository")));
 });
 
 test("readonly records missing DOC_ID are rejected and never assigned", async () => {
@@ -239,6 +394,16 @@ test("readonly public manifests omit Notion internals while private audit stays 
     assert.ok(!raw.includes(outputBaseRoot), manifest.brand);
     assert.ok(!raw.includes(os.homedir()), manifest.brand);
     assert.ok(!raw.includes("dry-run-notion-token"), manifest.brand);
+    for (const privateToken of routedDryRunDocuments().map((document) => document.meta.shareToken).filter(Boolean)) {
+      assert.ok(!raw.includes(privateToken), manifest.brand);
+    }
+    assert.ok(!raw.includes("redacted-private-url") || raw.includes("[redacted-private-url]"), manifest.brand);
+    for (const entry of manifest.documents) {
+      if (entry.canonicalPath.includes("[redacted]")) {
+        assert.equal(entry.finalUrl, "[redacted-private-url]");
+        assert.ok(entry.htmlPath.includes("[redacted]"));
+      }
+    }
   }
 });
 
@@ -270,9 +435,38 @@ async function buildReadonlyFixture(
     routes,
     outputBaseRoot,
     loadDocuments: loader ?? (async () => documents),
-    now: () => "2026-07-19T00:00:00.000Z"
+    now: () => "2026-07-19T00:00:00.000Z",
+    pdfRenderer: input.pdfRenderer ?? createFixtureRoutedPdfRenderer()
   });
   return { result, outputBaseRoot };
+}
+
+function makeDoc(
+  brand: string,
+  pageId: string,
+  overrides: Partial<DocumentModel["meta"]>
+): DocumentModel {
+  const base = routedDryRunDocuments().find((document) => document.meta.brand.label === brand) ?? routedDryRunDocuments()[0]!;
+  return {
+    ...structuredClone(base),
+    meta: {
+      ...structuredClone(base.meta),
+      ...overrides,
+      brand: { label: brand, token: brand, slug: brand.toLowerCase() },
+      title: `${brand} fixture`,
+      publish: overrides.publish ?? true,
+      status: overrides.status ?? "Approved"
+    },
+    source: {
+      ...structuredClone(base.source),
+      notionPageId: pageId
+    },
+    validation: emptyValidation()
+  };
+}
+
+function canonicalPathToHtmlPath(canonicalPath: string): string {
+  return path.join(...canonicalPath.replace(/^\/|\/$/g, "").split("/"), "index.html");
 }
 
 async function tempRoot(): Promise<string> {

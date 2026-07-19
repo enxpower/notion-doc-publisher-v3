@@ -15,6 +15,7 @@ import {
   type BrandRoute,
   type DryRunDeploymentPlan
 } from "./brand-routing.js";
+import { inspectPdfFile, type RoutedPdfRenderer } from "./routed-pdf.js";
 
 export type RoutedBuildStatus = "success" | "blocked" | "failed";
 
@@ -31,6 +32,19 @@ export type RoutedDocumentPlan = {
   finalUrl: string;
   htmlPath: string;
   pdfPath?: string;
+};
+
+export type RoutedPdfRenderStatus = "planned" | "success" | "failed";
+
+export type RoutedPdfManifestResult = {
+  docId: string;
+  path: string;
+  status: RoutedPdfRenderStatus;
+  presentationProfileKey?: string | null;
+  byteSize?: number;
+  pageCount?: number;
+  errorCode?: string;
+  errorMessage?: string;
 };
 
 export type RoutedBrandManifest = {
@@ -50,6 +64,10 @@ export type RoutedBrandManifest = {
   allowedUrlNamespaces: string[];
   canonicalPaths: string[];
   pdfPaths: string[];
+  plannedPdfCount: number;
+  successfulPdfCount: number;
+  failedPdfCount: number;
+  pdfResults: RoutedPdfManifestResult[];
   writebackPlan: Array<{ docId: string; url: string }>;
   documents: RoutedDocumentPlan[];
   files: string[];
@@ -94,6 +112,8 @@ export async function buildRoutedSites(input: {
   previousSnapshots?: Record<string, string[]>;
   now?: () => string;
   prevalidated?: boolean;
+  pdfRenderer?: RoutedPdfRenderer;
+  redactPrivateManifestPaths?: boolean;
 }): Promise<RoutedBuildResult> {
   const buildTimestamp = input.now?.() ?? new Date().toISOString();
   const outputBaseRoot = path.resolve(input.outputBaseRoot);
@@ -117,6 +137,7 @@ export async function buildRoutedSites(input: {
       ...plan.route,
       outputRoot: path.resolve(plan.route.outputRoot)
     };
+    const brand = normalizeBrand(route.brand);
     const sourceDocuments = plan.documents;
     const routeErrors: RoutedManifestIssue[] = plan.errors.map((message) => ({
       code: "ROUTE_PLAN_BLOCKED",
@@ -152,6 +173,7 @@ export async function buildRoutedSites(input: {
 
     const trackedFiles: string[] = [];
     const documentPlans: RoutedDocumentPlan[] = [];
+    const pdfResults: RoutedPdfManifestResult[] = [];
 
     if (plan.ok && routeErrors.length === 0 && documentsForOutput.length > 0) {
       const routeConfig = {
@@ -193,6 +215,30 @@ export async function buildRoutedSites(input: {
       }
 
       await writeRouteShellPages(route.outputRoot, documentsForOutput, routeConfig, trackedFiles);
+
+      if (input.pdfRenderer) {
+        const pdfRenderResult = await renderRoutePdfs({
+          documents: documentsForOutput,
+          documentPlans,
+          route,
+          config: routeConfig,
+          outputBaseRoot,
+          renderer: input.pdfRenderer
+        });
+        trackedFiles.push(...pdfRenderResult.files);
+        routeErrors.push(...pdfRenderResult.errors);
+        pdfResults.push(...pdfRenderResult.results);
+      } else {
+        pdfResults.push(...documentPlans.flatMap((document) => document.pdfPath
+          ? [{
+              docId: document.docId,
+              path: document.pdfPath,
+              status: "planned" as const,
+              presentationProfileKey: route.presentationProfileKey ?? null
+            }]
+          : []
+        ));
+      }
     }
 
     const uniqueFiles = uniqueSorted(trackedFiles);
@@ -214,13 +260,31 @@ export async function buildRoutedSites(input: {
       allowedStagingRoot: outputBaseRoot,
       productionDeploymentEnabled: false
     });
+    const finalDeploymentPlan = routeErrors.length > 0
+      ? blockDeploymentPlan(deploymentPlan, "Route output has blocking build errors.")
+      : deploymentPlan;
     const successfullyBuiltDocumentCount = documentPlans.length;
     const rejectedDocumentCount = sourceDocuments.length - successfullyBuiltDocumentCount;
     const buildStatus: RoutedBuildStatus = routeErrors.length > 0
       ? successfullyBuiltDocumentCount > 0 ? "failed" : "blocked"
       : uniqueFiles.length > 0 ? "success" : "blocked";
-    const brand = normalizeBrand(route.brand);
     const publicOutputRoot = path.posix.join(brand, "site");
+    const successfulPdfResults = pdfResults.filter((result) => result.status === "success");
+    const failedPdfResults = pdfResults.filter((result) => result.status === "failed");
+    const plannedPdfCount = documentPlans.filter((document) => document.pdfPath).length;
+    const manifestDocuments = input.redactPrivateManifestPaths
+      ? documentPlans.map((document) => redactPrivateDocumentPlan(document))
+      : documentPlans;
+    const manifestFiles = input.redactPrivateManifestPaths ? redactPrivateFileList(uniqueFiles) : uniqueFiles;
+    const manifestCanonicalPaths = input.redactPrivateManifestPaths
+      ? documentPlans.map((document) => redactPrivateCanonicalPath(document.canonicalPath))
+      : documentPlans.map((document) => document.canonicalPath);
+    const manifestWritebackPlan = input.redactPrivateManifestPaths
+      ? documentPlans.map((document) => ({
+          docId: document.docId,
+          url: isPrivateCanonicalPath(document.canonicalPath) ? "[redacted-private-url]" : document.finalUrl
+        }))
+      : documentPlans.map((document) => ({ docId: document.docId, url: document.finalUrl }));
 
     const manifest: RoutedBrandManifest = {
       schema: "notion-doc-publisher-v3/routed-brand-manifest",
@@ -237,16 +301,22 @@ export async function buildRoutedSites(input: {
       cname: route.cname,
       presentationProfileKey: route.presentationProfileKey,
       allowedUrlNamespaces: route.allowedUrlNamespaces ?? [],
-      canonicalPaths: documentPlans.map((document) => document.canonicalPath),
-      pdfPaths: documentPlans.flatMap((document) => document.pdfPath ? [document.pdfPath] : []),
-      writebackPlan: documentPlans.map((document) => ({ docId: document.docId, url: document.finalUrl })),
-      documents: documentPlans,
-      files: uniqueFiles,
+      canonicalPaths: manifestCanonicalPaths,
+      pdfPaths: input.pdfRenderer
+        ? successfulPdfResults.map((result) => result.path)
+        : documentPlans.flatMap((document) => document.pdfPath ? [document.pdfPath] : []),
+      plannedPdfCount,
+      successfulPdfCount: successfulPdfResults.length,
+      failedPdfCount: failedPdfResults.length,
+      pdfResults,
+      writebackPlan: manifestWritebackPlan,
+      documents: manifestDocuments,
+      files: manifestFiles,
       buildTimestamp,
       buildStatus,
       errors: sanitizeManifestIssues(routeErrors),
       warnings: sanitizeManifestIssues(routeWarnings),
-      deploymentPlan: publicDeploymentPlan(deploymentPlan, publicOutputRoot)
+      deploymentPlan: publicDeploymentPlan(finalDeploymentPlan, publicOutputRoot, input.redactPrivateManifestPaths === true)
     };
 
     await writeManifest(outputBaseRoot, manifest);
@@ -276,6 +346,203 @@ export async function buildRoutedSites(input: {
   await fs.writeFile(path.join(outputBaseRoot, "routed-build-summary.json"), `${JSON.stringify(summary, null, 2)}\n`, "utf8");
 
   return { summary, manifests };
+}
+
+async function renderRoutePdfs(input: {
+  documents: DocumentModel[];
+  documentPlans: RoutedDocumentPlan[];
+  route: BrandRoute;
+  config: AppConfig;
+  outputBaseRoot: string;
+  renderer: RoutedPdfRenderer;
+}): Promise<{
+  results: RoutedPdfManifestResult[];
+  files: string[];
+  errors: RoutedManifestIssue[];
+}> {
+  const brand = normalizeBrand(input.route.brand);
+  const documentByDocId = new Map(input.documents.map((document) => [document.meta.docId, document]));
+  const results: RoutedPdfManifestResult[] = [];
+  const files: string[] = [];
+  const errors: RoutedManifestIssue[] = [];
+
+  for (const plan of input.documentPlans) {
+    if (!plan.pdfPath || !plan.docId) {
+      const issue = {
+        code: "PDF_PATH_MISSING",
+        message: "Expected PDF path is missing from the routed document plan.",
+        docId: plan.docId
+      };
+      errors.push(issue);
+      results.push(failedPdfResult(plan, input.route, issue));
+      continue;
+    }
+
+    if (!isSafeRelativePublicPath(plan.pdfPath)) {
+      const issue = {
+        code: "PDF_PATH_UNSAFE",
+        message: "Expected PDF path is not a safe relative public path.",
+        docId: plan.docId,
+        path: plan.pdfPath
+      };
+      errors.push(issue);
+      results.push(failedPdfResult(plan, input.route, issue));
+      continue;
+    }
+
+    const document = documentByDocId.get(plan.docId);
+    if (!document) {
+      const issue = {
+        code: "PDF_DOCUMENT_MISSING",
+        message: "Routed PDF plan does not match an accepted in-memory document.",
+        docId: plan.docId
+      };
+      errors.push(issue);
+      results.push(failedPdfResult(plan, input.route, issue));
+      continue;
+    }
+
+    const outputPdfPath = path.resolve(input.route.outputRoot, plan.pdfPath);
+    if (!isPathInsideRoot(outputPdfPath, input.route.outputRoot)) {
+      const issue = {
+        code: "PDF_OUTPUT_ESCAPES_ROUTE",
+        message: "Expected PDF output path escapes the brand site root.",
+        docId: plan.docId,
+        path: plan.pdfPath
+      };
+      errors.push(issue);
+      results.push(failedPdfResult(plan, input.route, issue));
+      continue;
+    }
+
+    try {
+      await input.renderer({
+        document,
+        config: input.config,
+        route: input.route,
+        outputPdfPath,
+        workDir: path.join(input.outputBaseRoot, "_pdf-work", brand, plan.docId)
+      });
+    } catch (error) {
+      const issue = {
+        code: "PDF_RENDER_FAILED",
+        message: sanitizeMessage(error instanceof Error ? error.message : "PDF rendering failed."),
+        docId: plan.docId
+      };
+      errors.push(issue);
+      results.push(failedPdfResult(plan, input.route, issue));
+      continue;
+    }
+
+    const inspection = await inspectPdfFile(outputPdfPath);
+    if (!inspection.ok) {
+      const issue = {
+        code: inspection.errorCode ?? "PDF_INTEGRITY_FAILED",
+        message: sanitizeMessage(inspection.errorMessage ?? "Generated PDF did not pass integrity checks."),
+        docId: plan.docId,
+        path: plan.pdfPath
+      };
+      errors.push(issue);
+      results.push({
+        docId: plan.docId,
+        path: plan.pdfPath,
+        status: "failed",
+        presentationProfileKey: input.route.presentationProfileKey ?? null,
+        byteSize: inspection.byteSize,
+        pageCount: inspection.pageCount,
+        errorCode: issue.code,
+        errorMessage: issue.message
+      });
+      continue;
+    }
+
+    const htmlLinkIssue = await validatePdfHtmlLink(input.route.outputRoot, plan);
+    if (htmlLinkIssue) {
+      errors.push(htmlLinkIssue);
+      results.push({
+        docId: plan.docId,
+        path: plan.pdfPath,
+        status: "failed",
+        presentationProfileKey: input.route.presentationProfileKey ?? null,
+        byteSize: inspection.byteSize,
+        pageCount: inspection.pageCount,
+        errorCode: htmlLinkIssue.code,
+        errorMessage: htmlLinkIssue.message
+      });
+      continue;
+    }
+
+    files.push(plan.pdfPath);
+    results.push({
+      docId: plan.docId,
+      path: plan.pdfPath,
+      status: "success",
+      presentationProfileKey: input.route.presentationProfileKey ?? null,
+      byteSize: inspection.byteSize,
+      pageCount: inspection.pageCount
+    });
+  }
+
+  return { results, files, errors };
+}
+
+function failedPdfResult(
+  plan: RoutedDocumentPlan,
+  route: BrandRoute,
+  issue: RoutedManifestIssue
+): RoutedPdfManifestResult {
+  return {
+    docId: plan.docId,
+    path: plan.pdfPath ?? "",
+    status: "failed",
+    presentationProfileKey: route.presentationProfileKey ?? null,
+    errorCode: issue.code,
+    errorMessage: issue.message
+  };
+}
+
+async function validatePdfHtmlLink(
+  outputRoot: string,
+  plan: RoutedDocumentPlan
+): Promise<RoutedManifestIssue | undefined> {
+  const htmlPath = path.resolve(outputRoot, plan.htmlPath);
+  if (!isPathInsideRoot(htmlPath, outputRoot)) {
+    return {
+      code: "HTML_PATH_ESCAPES_ROUTE",
+      message: "Rendered HTML path escapes the brand site root.",
+      docId: plan.docId,
+      path: plan.htmlPath
+    };
+  }
+
+  try {
+    const html = await fs.readFile(htmlPath, "utf8");
+    const expectedHref = `href="../../${plan.pdfPath}"`;
+    if (!html.includes(expectedHref)) {
+      return {
+        code: "HTML_PDF_LINK_MISSING",
+        message: "Rendered HTML does not link to the generated same-brand PDF path.",
+        docId: plan.docId
+      };
+    }
+  } catch {
+    return {
+      code: "HTML_OUTPUT_MISSING",
+      message: "Rendered HTML file was not found for PDF link validation.",
+      docId: plan.docId,
+      path: plan.htmlPath
+    };
+  }
+
+  return undefined;
+}
+
+function blockDeploymentPlan(plan: DryRunDeploymentPlan, reason: string): DryRunDeploymentPlan {
+  return {
+    ...plan,
+    ok: false,
+    errors: [...new Set([...plan.errors, reason])]
+  };
 }
 
 async function writeRouteShellPages(
@@ -458,6 +725,71 @@ function canonicalPathToRelative(canonicalPath: string): string | undefined {
   return isSafeRelativePublicPath(relative) ? relative : undefined;
 }
 
+function redactPrivateDocumentPlan(plan: RoutedDocumentPlan): RoutedDocumentPlan {
+  if (!isPrivateCanonicalPath(plan.canonicalPath)) {
+    return plan;
+  }
+  return {
+    ...plan,
+    canonicalPath: redactPrivateCanonicalPath(plan.canonicalPath),
+    finalUrl: "[redacted-private-url]",
+    htmlPath: redactPrivateRelativePath(plan.htmlPath)
+  };
+}
+
+function redactPrivateFileList(files: string[]): string[] {
+  const aliases = new Map<string, string>();
+  const counters = new Map<string, number>();
+  return files.map((file) => redactPrivateRelativePath(file, aliases, counters));
+}
+
+function redactPrivateCanonicalPath(value: string): string {
+  if (!isPrivateCanonicalPath(value)) {
+    return value;
+  }
+  const namespace = canonicalNamespace(value) ?? "private";
+  return `/${namespace}/[redacted]/`;
+}
+
+function redactPrivateRelativePath(
+  value: string,
+  aliases?: Map<string, string>,
+  counters?: Map<string, number>
+): string {
+  const normalized = value.replace(/\\/g, "/");
+  const parts = normalized.split("/");
+  const namespace = parts[0];
+  const token = parts[1];
+  if (!namespace || !token || !VALID_PRIVATE_LINK_NAMESPACES.has(namespace)) {
+    return normalized;
+  }
+
+  let redacted = "[redacted]";
+  if (aliases && counters) {
+    const key = `${namespace}/${token}`;
+    const existing = aliases.get(key);
+    if (existing) {
+      redacted = existing;
+    } else {
+      const next = (counters.get(namespace) ?? 0) + 1;
+      counters.set(namespace, next);
+      redacted = `[redacted-${next}]`;
+      aliases.set(key, redacted);
+    }
+  }
+  return [namespace, redacted, ...parts.slice(2)].join("/");
+}
+
+function isPrivateCanonicalPath(value: string): boolean {
+  const namespace = canonicalNamespace(value);
+  return namespace ? VALID_PRIVATE_LINK_NAMESPACES.has(namespace) : false;
+}
+
+function isPathInsideRoot(candidate: string, root: string): boolean {
+  const relative = path.relative(path.resolve(root), path.resolve(candidate));
+  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+}
+
 function sanitizeIssues(issues: ValidationIssue[]): RoutedManifestIssue[] {
   return issues.map((issue) => ({
     code: issue.code,
@@ -484,12 +816,12 @@ function sanitizeMessage(message: string): string {
     .replace(/\/private\/[^\s"]+/g, "[redacted-path]");
 }
 
-function publicDeploymentPlan(plan: DryRunDeploymentPlan, sourceDir: string): DryRunDeploymentPlan {
+function publicDeploymentPlan(plan: DryRunDeploymentPlan, sourceDir: string, redactPrivatePaths = false): DryRunDeploymentPlan {
   return {
     ...plan,
     sourceDir,
     errors: plan.errors.map(sanitizeMessage),
-    wouldDelete: [...plan.wouldDelete]
+    wouldDelete: redactPrivatePaths ? redactPrivateFileList(plan.wouldDelete) : [...plan.wouldDelete]
   };
 }
 
@@ -501,7 +833,13 @@ function safeIssuePath(value: string | undefined): string | undefined {
   if (!value || value.includes("/Users/") || value.includes("/private/") || /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i.test(value)) {
     return undefined;
   }
-  return value.startsWith("/") || /^[a-z]+$/i.test(value) ? value : undefined;
+  if (value.startsWith("/")) {
+    return redactPrivateCanonicalPath(value);
+  }
+  if (isSafeRelativePublicPath(value)) {
+    return redactPrivateRelativePath(value);
+  }
+  return /^[a-z]+$/i.test(value) ? value : undefined;
 }
 
 function assertUniqueRouteBrands(routes: BrandRoute[]): void {

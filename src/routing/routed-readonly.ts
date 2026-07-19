@@ -6,6 +6,7 @@ import { enableNotionReadOnlyMode } from "../notion/read-only-guard.js";
 import { isPublishableCandidate, validateDocuments } from "../validate/validate.js";
 import { buildRoutedSites, type RoutedBuildResult } from "./routed-build.js";
 import { normalizeBrand, type BrandRoute } from "./brand-routing.js";
+import { renderRoutedDocumentPdf, type RoutedPdfRenderer } from "./routed-pdf.js";
 
 export type RoutedReadonlyAuditRecord = {
   pageId: string;
@@ -81,6 +82,7 @@ export async function buildRoutedReadonly(input: {
   outputBaseRoot: string;
   loadDocuments: (config: AppConfig) => Promise<DocumentModel[]>;
   now?: () => string;
+  pdfRenderer?: RoutedPdfRenderer;
 }): Promise<RoutedReadonlyBuildResult> {
   const restoreReadOnly = enableNotionReadOnlyMode("build:routed:readonly");
   try {
@@ -95,7 +97,9 @@ export async function buildRoutedReadonly(input: {
       config,
       outputBaseRoot: input.outputBaseRoot,
       now: input.now,
-      prevalidated: true
+      prevalidated: true,
+      pdfRenderer: input.pdfRenderer ?? renderRoutedDocumentPdf,
+      redactPrivateManifestPaths: true
     });
     const auditReport = createReadonlyAuditReport(documents, input.routes, input.outputBaseRoot, result, input.now?.());
     const auditReportPath = path.join(input.outputBaseRoot, "_audit", "read-only-audit.json");

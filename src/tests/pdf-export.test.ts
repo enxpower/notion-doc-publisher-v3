@@ -9,16 +9,18 @@
  *   - DOC_ID filtering and error handling
  *   - Table column widths: absolute inch values (not fr) for 2–5 col
  *
- * All tests run in memory — no Notion access, no file output.
+ * Tests use in-memory fixtures and temporary directories only — no Notion access.
  */
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
 import fs from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
+import type { AppConfig } from "../config.js";
 import type { DocumentModel } from "../model/document.js";
 import { emptyValidation } from "../model/document.js";
 import { renderDocumentTypst } from "../pdf/render-typst.js";
-import { findDocument } from "../pdf/export-pdf.js";
+import { exportDocumentTypst, findDocument } from "../pdf/export-pdf.js";
 import type { BrandInfo } from "../pdf/types.js";
 
 // ── Test fixtures ─────────────────────────────────────────────────────────────
@@ -53,6 +55,28 @@ function makeDoc(
     assets: [],
     source: { notionPageId: "test-page-id", notionDatabaseId: "test-db-id" },
     validation: emptyValidation(),
+  };
+}
+
+function testConfig(): AppConfig {
+  return {
+    notionToken: "test-token",
+    notionDatabaseId: "test-db",
+    docIdYearMonth: "2606",
+    allowedVisibility: new Set(["Public"]),
+    publishableStatuses: new Set(["Approved"]),
+    allowedBrands: null,
+    brandTokens: { ARCBOS: "ARCBOS" },
+    documentTypeTokens: { Agreement: "AGR" },
+    brandProfiles: { ARCBOS: TEST_BRAND },
+    registerPublic: false,
+    robotsDisallowDocs: false,
+    allowMissingShareToken: false,
+    legacyUnlistedDocsPath: false,
+    autoGenerateShareToken: false,
+    autoFillPrivateNamespace: false,
+    autoFillPortalCategory: false,
+    legacyPrivateDocIdUrls: false
   };
 }
 
@@ -104,6 +128,50 @@ test("exporter does not read from dist/docs", async () => {
       `${label} must not reference dist/docs`
     );
   }
+});
+
+test("exportDocumentTypst can suppress raw asset and compiler output for routed readonly", async () => {
+  const doc = makeDoc();
+  doc.assets = [{
+    sourceUrl: "https://asset.example.invalid/asset-marker/asset.png",
+    outputPath: "",
+    kind: "image",
+    local: false
+  }];
+  const outDir = await fs.mkdtemp(path.join(os.tmpdir(), "notion-pdf-export-"));
+  const originalFetch = globalThis.fetch;
+  const originalWarn = console.warn;
+  const originalLog = console.log;
+  let warned = "";
+  let logged = "";
+  let assetErrorSeen = false;
+
+  globalThis.fetch = async (): Promise<Response> => {
+    throw new Error("asset-marker");
+  };
+  console.warn = (...args: unknown[]) => {
+    warned += args.join(" ");
+  };
+  console.log = (...args: unknown[]) => {
+    logged += args.join(" ");
+  };
+
+  try {
+    await exportDocumentTypst(doc, testConfig(), outDir, {
+      onAssetError: () => {
+        assetErrorSeen = true;
+      },
+      logCompileOutput: false
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+    console.warn = originalWarn;
+    console.log = originalLog;
+  }
+
+  assert.equal(assetErrorSeen, true);
+  assert.equal(warned.includes("asset-marker"), false);
+  assert.equal(logged.includes(outDir), false);
 });
 
 // ── 5. No TOC in rendered output ─────────────────────────────────────────────
