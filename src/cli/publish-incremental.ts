@@ -14,10 +14,14 @@ import {
   type IncrementalLifecycleWriteback,
   type IncrementalLifecycleWritebackClient
 } from "../routing/incremental-apply.js";
-import { loadRoutedReadonlyConfigFromEnvironment } from "../routing/routed-readonly.js";
+import {
+  applyReadOnlyPersistedFieldRequirements,
+  loadRoutedReadonlyConfigFromEnvironment
+} from "../routing/routed-readonly.js";
 import { createFixtureRoutedPdfRenderer } from "../routing/routed-pdf.js";
 import { normalizeBrand, type BrandRoute } from "../routing/brand-routing.js";
 import { loadBrandRoutes } from "../routing/routes.js";
+import { validateDocuments } from "../validate/validate.js";
 
 class FixtureLifecycleWritebackClient implements IncrementalLifecycleWritebackClient {
   readonly updates: IncrementalLifecycleWriteback[] = [];
@@ -38,6 +42,8 @@ await runCli(async () => {
   const resultPath = path.resolve(process.env.INCREMENTAL_APPLY_RESULT_PATH ?? "dist/incremental-apply/result.json");
   const previousState = await readOptionalState(statePath);
   const documents = testMode ? routedDryRunDocuments() : await loadDocuments(config);
+  validateDocuments(documents, config);
+  applyReadOnlyPersistedFieldRequirements(documents, config);
   const plan = createIncrementalPlan({ documents, routes, config, previousState });
   const expectedPlanPath = process.env.INCREMENTAL_EXPECTED_PLAN_PATH?.trim() ||
     (process.env.GITHUB_ACTIONS === "true" ? process.env.INCREMENTAL_PLAN_PATH?.trim() : undefined);
