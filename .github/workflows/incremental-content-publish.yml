@@ -1,0 +1,161 @@
+name: Incremental Content Publish
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Run mode"
+        type: choice
+        required: true
+        default: dry-run
+        options:
+          - dry-run
+          - apply
+      confirm_production:
+        description: "Type PHASE2-INCREMENTAL-PUBLISH to permit apply mode"
+        required: false
+        default: ""
+      lifecycle_writeback:
+        description: "Write Notion lifecycle results; use only after deployment verification"
+        type: boolean
+        required: true
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: incremental-content-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+      NOTION_DATABASE_ID: ${{ vars.NOTION_DATABASE_ID || secrets.NOTION_DATABASE_ID }}
+      ALLOWED_VISIBILITY: ${{ vars.ALLOWED_VISIBILITY || 'Public' }}
+      PUBLISHABLE_STATUSES: ${{ vars.PUBLISHABLE_STATUSES || 'Final' }}
+      BRAND_TOKENS_JSON: '{"ARCBOS":"ARCBOS","ENERGIZE":"ENERGIZE","AGIM":"AGIM","GONG":"GONG"}'
+      DOCUMENT_TYPE_TOKENS_JSON: ${{ vars.DOCUMENT_TYPE_TOKENS_JSON || secrets.DOCUMENT_TYPE_TOKENS_JSON }}
+      PHASE2_STATE_PATH: state/incremental-state.json
+      INCREMENTAL_APPLY_RESULT_PATH: dist/incremental-apply/result.json
+      PHASE2_DEPLOYED_REPO_ROOTS_JSON: '{"ARCBOS":"targets/docs-arcbos-v2","ENERGIZE":"targets/docs-energize-v2","AGIM":"targets/agim-docs","GONG":"targets/pub"}'
+
+    steps:
+      - name: Validate apply confirmation
+        if: ${{ inputs.mode == 'apply' && inputs.confirm_production != 'PHASE2-INCREMENTAL-PUBLISH' }}
+        run: |
+          echo "Apply mode requires exact confirmation."
+          exit 1
+
+      - name: Checkout publisher
+        uses: actions/checkout@v4
+
+      - name: Checkout private state
+        if: ${{ vars.PHASE2_STATE_REPOSITORY != '' }}
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.PHASE2_STATE_REPOSITORY }}
+          path: state
+          token: ${{ secrets.PUBLISHER_STATE_TOKEN }}
+
+      - name: Checkout ARCBOS target
+        if: ${{ inputs.mode == 'apply' }}
+        uses: actions/checkout@v4
+        with:
+          repository: enxpower/docs-arcbos-v2
+          path: targets/docs-arcbos-v2
+          token: ${{ secrets.PUBLISHER_DEPLOY_TOKEN }}
+
+      - name: Checkout ENERGIZE target
+        if: ${{ inputs.mode == 'apply' }}
+        uses: actions/checkout@v4
+        with:
+          repository: enxpower/docs-energize-v2
+          path: targets/docs-energize-v2
+          token: ${{ secrets.PUBLISHER_DEPLOY_TOKEN }}
+
+      - name: Checkout AGIM target
+        if: ${{ inputs.mode == 'apply' }}
+        uses: actions/checkout@v4
+        with:
+          repository: enxpower/agim-docs
+          path: targets/agim-docs
+          token: ${{ secrets.PUBLISHER_DEPLOY_TOKEN }}
+
+      - name: Checkout GONG target
+        if: ${{ inputs.mode == 'apply' }}
+        uses: actions/checkout@v4
+        with:
+          repository: enxpower/pub
+          path: targets/pub
+          token: ${{ secrets.PUBLISHER_DEPLOY_TOKEN }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Validate workflow safety
+        shell: bash
+        run: |
+          set -euo pipefail
+          operational_steps="$(awk '
+            /name: Validate workflow safety/ { skip=1 }
+            /name: Dry-run incremental publish/ { skip=0 }
+            skip != 1 { print }
+          ' .github/workflows/incremental-content-publish.yml)"
+          blocked="$(printf '%s' "$operational_steps" | grep -E 'npm run assign-id|npm run ci:writeback|npm run writeback:routed|preview-publish|Share Token.*generate|Share Token.*rotate|PATCH https://api.notion.com|POST https://api.notion.com' || true)"
+          if [ -n "$blocked" ]; then
+            echo "Incremental content publish workflow references a blocked mutation or legacy publishing path."
+            exit 1
+          fi
+
+      - name: Dry-run incremental publish
+        if: ${{ inputs.mode == 'dry-run' }}
+        run: npm run publish:incremental:dry-run
+
+      - name: Apply incremental output locally
+        if: ${{ inputs.mode == 'apply' }}
+        env:
+          INCREMENTAL_LIFECYCLE_WRITEBACK: ${{ inputs.lifecycle_writeback && 'true' || 'false' }}
+        run: npm run publish:incremental
+
+      - name: Commit private state
+        if: ${{ inputs.mode == 'apply' && vars.PHASE2_STATE_REPOSITORY != '' }}
+        working-directory: state
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add incremental-state.json
+          if git diff --cached --quiet; then
+            echo "No private state changes."
+          else
+            git commit -m "chore: update incremental publisher state"
+            git push
+          fi
+
+      - name: Commit target repositories
+        if: ${{ inputs.mode == 'apply' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for repo in targets/docs-arcbos-v2 targets/docs-energize-v2 targets/agim-docs targets/pub; do
+            git -C "$repo" config user.name "github-actions[bot]"
+            git -C "$repo" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            if git -C "$repo" status --short | grep -q .; then
+              git -C "$repo" add .
+              git -C "$repo" commit -m "chore: publish incremental document updates"
+              git -C "$repo" push
+            else
+              echo "No target changes in $repo."
+            fi
+          done

@@ -384,6 +384,46 @@ test("incremental content plan workflow is manual, fast, and non-mutating", asyn
   assert.ok(!operationalWorkflow.includes("actions/upload-pages-artifact"));
 });
 
+test("incremental content publish workflow is manual, guarded, and route-bounded", async () => {
+  const workflow = await fs.readFile(path.resolve(".github/workflows/incremental-content-publish.yml"), "utf8");
+  const operationalWorkflow = workflow.replace(
+    /      - name: Validate workflow safety[\s\S]*?(?=      - name: Dry-run incremental publish)/,
+    ""
+  );
+
+  assert.ok(workflow.includes("workflow_dispatch:"));
+  assert.ok(!workflow.includes("push:"));
+  assert.ok(!workflow.includes("pull_request:"));
+  assert.ok(!workflow.includes("schedule:"));
+  assert.ok(workflow.includes("confirm_production"));
+  assert.ok(workflow.includes("PHASE2-INCREMENTAL-PUBLISH"));
+  assert.ok(workflow.includes("PUBLISHER_DEPLOY_TOKEN"));
+  assert.ok(workflow.includes("PUBLISHER_STATE_TOKEN"));
+  assert.ok(workflow.includes("PHASE2_STATE_PATH: state/incremental-state.json"));
+  assert.ok(workflow.includes('"GONG":"targets/pub"'));
+  assert.ok(workflow.includes("npm run publish:incremental:dry-run"));
+  assert.ok(workflow.includes("npm run publish:incremental"));
+  assert.ok(!operationalWorkflow.includes("npm run assign-id"));
+  assert.ok(!operationalWorkflow.includes("npm run ci:writeback"));
+  assert.ok(!operationalWorkflow.includes("npm run writeback:routed"));
+  assert.ok(!operationalWorkflow.includes("preview-publish"));
+  assert.ok(!operationalWorkflow.includes("actions/deploy-pages"));
+  assert.ok(!operationalWorkflow.includes("actions/upload-pages-artifact"));
+});
+
+test("legacy build has an explicit no-autofill validation mode without changing default build script", async () => {
+  const packageJson = JSON.parse(await fs.readFile(path.resolve("package.json"), "utf8")) as { scripts: Record<string, string> };
+  const buildSource = await fs.readFile(path.resolve("src/cli/build.ts"), "utf8");
+
+  assert.equal(packageJson.scripts.build, "tsc && node .tmp/cli/security-lint.js && node .tmp/cli/build.js");
+  assert.equal(
+    packageJson.scripts["build:readonly-validation"],
+    "tsc && node .tmp/cli/security-lint.js && BUILD_NO_AUTOFILL=true node .tmp/cli/build.js"
+  );
+  assert.ok(buildSource.includes('process.env.BUILD_NO_AUTOFILL === "true"'));
+  assert.ok(buildSource.includes("await autoFillDocuments(documents, config);"));
+});
+
 const FIXED_NOW = "2026-07-19T00:00:00.000Z";
 
 async function makeFixture(): Promise<{

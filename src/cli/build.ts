@@ -39,8 +39,13 @@ await runCli(async () => {
 
   const documents = await loadDocuments(config);
 
-  // Auto-fill missing Share Token / Namespace / Portal Category and write back to Notion
-  await autoFillDocuments(documents, config);
+  // Auto-fill missing Share Token / Namespace / Portal Category and write back to Notion,
+  // unless an explicit read-only validation run has disabled autofill.
+  if (process.env.BUILD_NO_AUTOFILL === "true") {
+    console.warn("[WARN] BUILD_NO_AUTOFILL=true: skipped Share Token / namespace / portal-category autofill.");
+  } else {
+    await autoFillDocuments(documents, config);
+  }
 
   const candidates = documents.filter((document) => isPublishableCandidate(document, config));
 
