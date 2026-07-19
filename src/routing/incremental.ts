@@ -179,6 +179,7 @@ export function createDesiredDocumentState(input: {
   config: AppConfig;
   rendererHash?: RendererFingerprintResolver;
   pdfRequired?: boolean;
+  ownedFilesOverride?: string[];
 }): DesiredDocumentState {
   const document = input.document;
   const route = input.route;
@@ -229,7 +230,9 @@ export function createDesiredDocumentState(input: {
         route
       })
     : defaultRendererHash(route, input.config);
-  const ownedFiles = ownedFilesForDocument(document, route);
+  const ownedFiles = input.ownedFilesOverride
+    ? uniqueSafeOwnedFiles(input.ownedFilesOverride)
+    : ownedFilesForDocument(document, route);
   const desiredStateHash = hashStable({ contentHash, routingHash, rendererHash, assetHash, ownedFiles });
 
   return {
@@ -353,6 +356,16 @@ function ownedFilesForDocument(document: DocumentModel, route: BrandRoute): stri
     }
   }
   return [...new Set(files.map((file) => file.replace(/\\/g, "/")))].sort();
+}
+
+function uniqueSafeOwnedFiles(files: string[]): string[] {
+  const unique = [...new Set(files.map((file) => file.replace(/\\/g, "/")))].sort();
+  for (const file of unique) {
+    if (!isSafeRelativePublicPath(file)) {
+      throw new UserFacingError(`Unsafe manifest-owned file path is blocked: ${file}`);
+    }
+  }
+  return unique;
 }
 
 function removeRecord(document: DocumentModel, previous: DocumentStateRecord): IncrementalPlanRecord {

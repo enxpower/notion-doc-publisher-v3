@@ -44,6 +44,57 @@ state. It records the last successful deployed state per document:
 Public site manifests must remain privacy-safe. Private deployment state belongs
 outside deployable site roots and must stay gitignored when generated locally.
 
+## Phase 1 State Migration
+
+Phase 1 downstream repositories contain older `.publisher_state.json` files
+whose page maps may be string values and do not enumerate document-owned files.
+Phase 2 does not treat those files as deletion authority.
+
+The migration command is:
+
+```bash
+npm run migrate:phase1-state
+```
+
+It is read-only with respect to Notion and downstream repositories. It requires
+`PHASE2_DEPLOYED_REPO_ROOTS_JSON`, a JSON object mapping Brand to a checked-out
+deployed repository tree. Example shape:
+
+```json
+{
+  "ARCBOS": "/tmp/docs-arcbos-v2",
+  "ENERGIZE": "/tmp/docs-energize-v2"
+}
+```
+
+Fixture mode is available for tests:
+
+```bash
+PHASE2_MIGRATION_TEST_MODE=fixture npm run migrate:phase1-state
+```
+
+The migration reconstructs private Phase 2 state only when ownership is proven
+from reliable sources:
+
+- exact canonical token path for the document HTML
+- exact `DOC_ID` PDF path
+- generated HTML metadata or same-brand PDF link
+- legacy page map correlation when present
+- deterministic document-specific asset paths
+
+Ambiguous files are never assigned to a document and never scheduled for
+deletion. They are recorded as unmanaged legacy files for owner review.
+
+When a legacy hash cannot be reconstructed from old state, the migration writes
+a documented baseline hash from the current desired Notion state and verified
+deployed output. The required post-migration idempotency check must classify
+unchanged healthy ARCBOS and ENERGIZE documents as `NOOP`, not `UPDATE` or
+`MOVE`.
+
+Local migration outputs are written under ignored `dist/phase2-state/private/`.
+Those files can contain private Notion page IDs and must not be copied into
+GitHub Pages artifacts.
+
 ## Hashing Strategy
 
 Hashes are deterministic SHA-256 values over stable JSON:
