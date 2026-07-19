@@ -62,8 +62,13 @@ await runCli(async () => {
   await fs.mkdir(path.dirname(resultPath), { recursive: true });
   await fs.writeFile(resultPath, `${JSON.stringify(sanitizeApplyResult(result), null, 2)}\n`, "utf8");
   if (mode === "apply") {
-    await fs.mkdir(path.dirname(statePath), { recursive: true });
-    await fs.writeFile(statePath, `${JSON.stringify(result.nextState, null, 2)}\n`, "utf8");
+    const stateChanged = !previousState || !sameStateRecords(previousState, result.nextState);
+    if (stateChanged) {
+      await fs.mkdir(path.dirname(statePath), { recursive: true });
+      await fs.writeFile(statePath, `${JSON.stringify(result.nextState, null, 2)}\n`, "utf8");
+    } else {
+      console.log("Private state unchanged; preserving the existing manifest byte-for-byte.");
+    }
   }
 
   console.log(
@@ -84,6 +89,10 @@ await runCli(async () => {
     }
   }
 });
+
+function sameStateRecords(previous: IncrementalStateManifest, next: IncrementalStateManifest): boolean {
+  return JSON.stringify(previous.records) === JSON.stringify(next.records);
+}
 
 function parseMode(args: string[]): IncrementalApplyMode {
   if (args.includes("--apply")) {
