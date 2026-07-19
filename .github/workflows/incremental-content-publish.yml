@@ -31,7 +31,7 @@ jobs:
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'issue_comment' &&
-       github.event.issue.number == 33 &&
+       github.event.issue.number == 40 &&
        github.actor == 'enxpower' &&
        startsWith(github.event.comment.body, '/phase2-publish PHASE2-INCREMENTAL-PUBLISH '))
     runs-on: ubuntu-latest
@@ -279,6 +279,18 @@ jobs:
         if: ${{ steps.execution.outputs.mode == 'apply' }}
         run: npm run writeback:incremental
 
+      - name: Upload transaction diagnostics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: incremental-publish-${{ github.run_id }}
+          if-no-files-found: ignore
+          retention-days: 3
+          path: |
+            dist/incremental-plan/**
+            dist/incremental-apply/**
+            dist/phase2-run/**
+
       - name: Publish run summary
         if: ${{ always() }}
         shell: bash
@@ -336,4 +348,4 @@ jobs:
               echo "- Notion mutations: \`$(jq -r '.mutationCount' "$INCREMENTAL_WRITEBACK_RESULT_PATH")\`"
             fi
           } > "$report"
-          gh issue comment 33 --repo "$GITHUB_REPOSITORY" --body-file "$report"
+          gh issue comment "${{ github.event.issue.number }}" --repo "$GITHUB_REPOSITORY" --body-file "$report"
