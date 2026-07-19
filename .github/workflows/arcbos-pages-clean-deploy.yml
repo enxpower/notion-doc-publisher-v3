@@ -36,8 +36,8 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           repository: enxpower/notion-doc-publisher-v3
-          run-id: 29675281140
-          artifact-ids: 8438733239
+          run-id: 29678904856
+          artifact-ids: 8439893179
           github-token: ${{ github.token }}
           path: _active-pages-artifact
           merge-multiple: true

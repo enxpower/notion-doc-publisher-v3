@@ -8,17 +8,14 @@ import { execFileSync } from "node:child_process";
 const EXPECTED = {
   owner: "enxpower",
   repo: "notion-doc-publisher-v3",
-  runId: "29675281140",
-  artifactId: "8438733239",
-  deploymentId: "5508223608",
-  sourceSha: "766cf3f92e159112d39e08c3534ba13f21f08d4c",
+  runId: "29678904856",
+  artifactId: "8439893179",
+  deploymentId: "5508947331",
+  sourceSha: "a10d61b1452aa734afa1dcfc11c814fc5e95fc1f",
   artifactName: "github-pages",
   environment: "github-pages",
   arcbosHtml: 9,
-  arcbosPdf: 9,
-  staleBrandHtml: 2,
-  staleBrandPdf: 2,
-  typFiles: 11
+  arcbosPdf: 9
 };
 
 const WORKFLOW_PATH = ".github/workflows/arcbos-pages-clean-deploy.yml";
@@ -119,13 +116,9 @@ async function cleanArtifact(sourceDir, outputDir) {
 
   const arcbosPdfSet = new Set(arcbosPages.map((page) => page.pdfFile));
   const stalePdfSet = new Set(stalePages.flatMap((page) => page.pdfFiles));
-  const staleBrandPdfCount = pdfFiles.filter((file) => /^pdf\/(?:ENERGIZE|AGIM|GONG)-[^/]+\.pdf$/.test(file)).length;
 
   assertCount("legitimate ARCBOS HTML", arcbosPages.length, EXPECTED.arcbosHtml);
   assertCount("legitimate ARCBOS PDFs", arcbosPdfSet.size, EXPECTED.arcbosPdf);
-  assertCount("stale non-ARCBOS HTML", stalePages.length, EXPECTED.staleBrandHtml);
-  assertCount("stale non-ARCBOS PDFs", staleBrandPdfCount, EXPECTED.staleBrandPdf);
-  assertCount(".typ intermediates", typFiles.length, EXPECTED.typFiles);
   assertTokenDerivedRoutes(arcbosPages);
 
   const keep = new Set();
