@@ -112,6 +112,7 @@ test("incremental apply REMOVE deletes only prior manifest-owned files and marks
   const fixture = await makeFixture();
   const document = structuredClone(fixture.documents.find((candidate) => normalizeBrand(candidate.meta.brand.label) === "ENERGIZE")!);
   const previousState = successfulState([document], fixture.routes, fixture.config);
+  const previousPdf = requiredPdfPath(previousState.records[0]!);
   await writePreviousOwnedFiles(fixture.repositories.ENERGIZE!, previousState.records[0]!);
   await fs.writeFile(path.join(fixture.repositories.ENERGIZE!, "assets", "shared.css"), "shared\n", "utf8");
   document.meta.publish = false;
@@ -135,7 +136,7 @@ test("incremental apply REMOVE deletes only prior manifest-owned files and marks
   assert.equal(result.nextState.records.length, 0);
   assert.equal(client.updates[0]?.status, "unpublished");
   await assertFileMissing(path.join(fixture.repositories.ENERGIZE!, "clients", "energizeclient01", "index.html"));
-  await assertFileMissing(path.join(fixture.repositories.ENERGIZE!, "pdf", "ENERGIZE-MEM-2606-0002.pdf"));
+  await assertFileMissing(path.join(fixture.repositories.ENERGIZE!, previousPdf));
   await assertFileExists(path.join(fixture.repositories.ENERGIZE!, "assets", "shared.css"));
 });
 
@@ -143,6 +144,7 @@ test("incremental apply MOVE preserves identity, keeps the shared PDF, and remov
   const fixture = await makeFixture();
   const base = structuredClone(fixture.documents[1]!);
   const previousState = successfulState([base], fixture.routes, fixture.config);
+  const previousPdf = requiredPdfPath(previousState.records[0]!);
   await writePreviousOwnedFiles(fixture.repositories.ENERGIZE!, previousState.records[0]!);
   const moved = structuredClone(base);
   moved.meta.visibility = "Internal";
@@ -171,7 +173,7 @@ test("incremental apply MOVE preserves identity, keeps the shared PDF, and remov
   assert.equal(result.nextState.records[0]!.shareToken, base.meta.shareToken);
   await assertFileMissing(path.join(fixture.repositories.ENERGIZE!, "clients", "energizeclient01", "index.html"));
   await assertFileExists(path.join(fixture.repositories.ENERGIZE!, "internal", "energizeclient01", "index.html"));
-  await assertFileExists(path.join(fixture.repositories.ENERGIZE!, "pdf", "ENERGIZE-MEM-2606-0002.pdf"));
+  await assertFileExists(path.join(fixture.repositories.ENERGIZE!, previousPdf));
 });
 
 test("incremental apply failed UPDATE preserves prior output and successful state", async () => {
@@ -248,6 +250,12 @@ function successfulState(
       };
     })
   };
+}
+
+function requiredPdfPath(record: { ownedFiles: string[] }): string {
+  const pdf = record.ownedFiles.find((file) => file.endsWith(".pdf"));
+  assert.ok(pdf);
+  return pdf;
 }
 
 async function writePreviousOwnedFiles(repositoryRoot: string, record: { ownedFiles: string[] }): Promise<void> {
