@@ -383,8 +383,8 @@ test("incremental content plan workflow is manual, fast, and non-mutating", asyn
   assert.ok(!operationalWorkflow.includes("npm run assign-id"));
   assert.ok(!operationalWorkflow.includes("npm run ci:writeback"));
   assert.ok(!operationalWorkflow.includes("npm run writeback:routed"));
-  assert.ok(operationalWorkflow.includes("actions/deploy-pages"));
-  assert.ok(operationalWorkflow.includes("actions/upload-pages-artifact"));
+  assert.ok(!operationalWorkflow.includes("actions/deploy-pages"));
+  assert.ok(!operationalWorkflow.includes("actions/upload-pages-artifact"));
 });
 
 test("incremental content publish workflow is manual, guarded, and route-bounded", async () => {
