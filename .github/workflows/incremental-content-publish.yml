@@ -20,6 +20,7 @@ on:
 
 permissions:
   contents: read
+  issues: write
 
 concurrency:
   group: incremental-content-publish
@@ -276,3 +277,35 @@ jobs:
               echo "Notion mutations: $(jq -r '.mutationCount' "$INCREMENTAL_WRITEBACK_RESULT_PATH")"
             fi
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Report owner-command result
+        if: ${{ always() && github.event_name == 'issue_comment' }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          set -euo pipefail
+          report="$(mktemp)"
+          {
+            echo "### Incremental Content Publish"
+            echo
+            echo "- Run ID: \`$GITHUB_RUN_ID\`"
+            echo "- Result: **$JOB_STATUS**"
+            echo "- Run: https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+            if [ -f "$INCREMENTAL_APPLY_RESULT_PATH" ]; then
+              echo "- Lifecycle counts: \`$(jq -c '.recordResults | group_by(.action) | map({key: .[0].action, value: length}) | from_entries' "$INCREMENTAL_APPLY_RESULT_PATH")\`"
+              echo "- Work: rendered=\`$(jq -r '.renderedDocumentCount' "$INCREMENTAL_APPLY_RESULT_PATH")\`, pdfs=\`$(jq -r '.generatedPdfCount' "$INCREMENTAL_APPLY_RESULT_PATH")\`, brands=\`$(jq -r '.deployedBrandCount' "$INCREMENTAL_APPLY_RESULT_PATH")\`, copied=\`$(jq -r '.copiedFileCount' "$INCREMENTAL_APPLY_RESULT_PATH")\`, deleted=\`$(jq -r '.deletedFileCount' "$INCREMENTAL_APPLY_RESULT_PATH")\`"
+            fi
+            if [ -f dist/phase2-run/target-commits.txt ]; then
+              echo "- Target commits:"
+              sed 's/^/  - /' dist/phase2-run/target-commits.txt
+            fi
+            if [ -f "$INCREMENTAL_VERIFICATION_RESULT_PATH" ]; then
+              echo "- Live lifecycle records verified: \`$(jq -r '.verifiedRecordCount' "$INCREMENTAL_VERIFICATION_RESULT_PATH")\`"
+            fi
+            if [ -f "$INCREMENTAL_WRITEBACK_RESULT_PATH" ]; then
+              echo "- Notion mutations: \`$(jq -r '.mutationCount' "$INCREMENTAL_WRITEBACK_RESULT_PATH")\`"
+            fi
+          } > "$report"
+          gh issue comment 33 --repo "$GITHUB_REPOSITORY" --body-file "$report"
