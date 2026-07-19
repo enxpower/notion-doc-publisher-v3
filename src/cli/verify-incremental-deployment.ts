@@ -45,7 +45,7 @@ await runCli(async () => {
   const records: VerificationRecord[] = [];
 
   for (const record of result.recordResults) {
-    if (record.status === "failed") {
+    if (record.status === "failed" || record.action === "INVALID") {
       const previous = previousByDocId.get(record.docId);
       if (previous) {
         records.push(await verifyRecord(record, [
