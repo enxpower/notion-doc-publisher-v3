@@ -286,7 +286,8 @@ async function readCommittedBrandProfiles(): Promise<Record<string, BrandProfile
       result[brand] = {
         displayName: typeof profile.displayName === "string" ? profile.displayName : brand,
         tagline: typeof profile.tagline === "string" ? profile.tagline : "",
-        shareImage: typeof profile.shareImage === "string" ? profile.shareImage : undefined
+        shareImage: typeof profile.shareImage === "string" ? profile.shareImage : undefined,
+        favicon: typeof profile.favicon === "string" ? profile.favicon : undefined
       };
     }
     return result;
