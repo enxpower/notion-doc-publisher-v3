@@ -43,7 +43,7 @@ jobs:
       BRAND_TOKENS_JSON: '{"ARCBOS":"ARCBOS","ENERGIZE":"ENERGIZE","AGIM":"AGIM","GONG":"GONG"}'
       DOCUMENT_TYPE_TOKENS_JSON: ${{ vars.DOCUMENT_TYPE_TOKENS_JSON || secrets.DOCUMENT_TYPE_TOKENS_JSON }}
       PHASE2_PREVIOUS_STATE_PATH: dist/phase2-run/previous-state.json
-      PHASE2_STATE_PATH: dist/phase2-run/next-state.json
+      PHASE2_STATE_PATH: state/incremental-state.json
       INCREMENTAL_PLAN_PATH: dist/incremental-plan/plan.json
       INCREMENTAL_APPLY_RESULT_PATH: dist/incremental-apply/result.json
       INCREMENTAL_VERIFICATION_RESULT_PATH: dist/incremental-apply/verification.json
@@ -145,10 +145,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test -f state/incremental-state.json
-          mkdir -p "$(dirname "$PHASE2_PREVIOUS_STATE_PATH")" "$(dirname "$PHASE2_STATE_PATH")"
-          cp state/incremental-state.json "$PHASE2_PREVIOUS_STATE_PATH"
-          cp state/incremental-state.json "$PHASE2_STATE_PATH"
+          test -f "$PHASE2_STATE_PATH"
+          mkdir -p "$(dirname "$PHASE2_PREVIOUS_STATE_PATH")"
+          cp "$PHASE2_STATE_PATH" "$PHASE2_PREVIOUS_STATE_PATH"
 
       - name: Validate workflow safety
         shell: bash
@@ -239,7 +238,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cp "../$PHASE2_STATE_PATH" incremental-state.json
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add incremental-state.json
