@@ -73,7 +73,7 @@ test("incremental apply rebuilds a complete ARCBOS Pages artifact when ARCBOS ch
 
   assert.equal(result.recordResults[0]?.status, "success");
   assert.equal(result.deployedBrandCount, 1);
-  await assertFileExists(path.join(fixture.repositories.ARCBOS!, "clients", "arcbosclient01", "index.html"));
+  await assertFileExists(path.join(fixture.repositories.ARCBOS!, "docs", "ARCBOS-SPEC-2606-0001", "index.html"));
   await assertFileExists(path.join(fixture.repositories.ARCBOS!, "pdf", "ARCBOS-SPEC-2606-0001.pdf"));
   await assertFileExists(path.join(fixture.repositories.ARCBOS!, "assets", "arcbos-favicon.svg"));
 });
