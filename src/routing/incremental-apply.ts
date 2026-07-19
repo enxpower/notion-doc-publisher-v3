@@ -218,7 +218,7 @@ export async function executeIncrementalApply(input: {
       setRecordResult(recordResults, record, "failed", "MISSING_PREVIOUS_ROUTE_OR_REPOSITORY");
       continue;
     }
-    const files = deletionPlanForRecord(record, previousRoute);
+    const files = moveDeletionPlan(record, previousRoute);
     const removed = await removeOwnedFiles({ repositoryRoot, files, route: previousRoute });
     deletedFileCount += removed.length;
     const brandResult = brandResults.get(previousBrand);
@@ -338,6 +338,22 @@ async function removeOwnedFiles(input: {
     removed.push(file);
   }
   return removed;
+}
+
+function moveDeletionPlan(record: IncrementalPlanRecord, previousRoute: BrandRoute): string[] {
+  const files = deletionPlanForRecord(record, previousRoute);
+  if (!record.previous || !record.desired) {
+    return files;
+  }
+  const sameDeploymentTarget =
+    normalizeBrand(record.previous.brand) === normalizeBrand(record.desired.brand) &&
+    record.previous.deploymentTarget === record.desired.deploymentTarget &&
+    record.previous.deploymentRoot === record.desired.deploymentRoot;
+  if (!sameDeploymentTarget) {
+    return files;
+  }
+  const desiredOwnedFiles = new Set(record.desired.ownedFiles);
+  return files.filter((file) => !desiredOwnedFiles.has(file));
 }
 
 function addDeploymentRoot(file: string, route: BrandRoute): string {
