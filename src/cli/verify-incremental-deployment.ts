@@ -64,16 +64,16 @@ await runCli(async () => {
       if (!next) {
         throw new UserFacingError(`Next state is missing successful ${record.action} record ${record.docId}.`);
       }
+      const nextPdfChecks = pdfChecks(next, "present");
       const checks: CheckInput[] = [
         { url: next.finalUrl, expected: "present", kind: "html" },
-        ...pdfChecks(next, "present")
+        ...nextPdfChecks
       ];
       const previous = previousByDocId.get(record.docId);
       if (record.action === "MOVE" && previous && previous.finalUrl !== next.finalUrl) {
-        checks.push(
-          { url: previous.finalUrl, expected: "absent", kind: "html" },
-          ...pdfChecks(previous, "absent")
-        );
+        checks.push({ url: previous.finalUrl, expected: "absent", kind: "html" });
+        const activePdfUrls = new Set(nextPdfChecks.map((check) => check.url));
+        checks.push(...pdfChecks(previous, "absent").filter((check) => !activePdfUrls.has(check.url)));
       }
       records.push(await verifyRecord(record, checks, retries, delayMs));
       continue;
