@@ -1,0 +1,65 @@
+name: Publisher CI
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "package.json"
+      - "package-lock.json"
+      - "tsconfig.json"
+      - ".github/workflows/**"
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "package.json"
+      - "package-lock.json"
+      - "tsconfig.json"
+      - ".github/workflows/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publisher-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - name: Install
+        run: npm ci
+      - name: Type check
+        run: npm run check
+      - name: Regression tests
+        shell: bash
+        run: |
+          set -o pipefail
+          npm test 2>&1 | tee test-output.txt
+      - name: Upload regression output
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: publisher-ci-output
+          path: test-output.txt
+          if-no-files-found: error
+          retention-days: 3
+      - name: Security lint
+        run: npm run lint:security
+      - name: Diff whitespace check
+        run: git diff --check origin/${{ github.base_ref || 'main' }}...HEAD
