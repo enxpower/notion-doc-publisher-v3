@@ -44,6 +44,20 @@ state. It records the last successful deployed state per document:
 Public site manifests must remain privacy-safe. Private deployment state belongs
 outside deployable site roots and must stay gitignored when generated locally.
 
+Production authoritative state is stored in the private repository
+`enxpower/notion-doc-publisher-state`. The publisher repository references it
+through the `PHASE2_STATE_REPOSITORY` Actions variable. Cross-repository access
+uses target-specific write deploy keys:
+
+- `DEPLOY_KEY_ARCBOS` for `enxpower/docs-arcbos-v2`
+- `DEPLOY_KEY_ENERGIZE` for `enxpower/docs-energize-v2`
+- `DEPLOY_KEY_AGIM` for `enxpower/agim-docs`
+- `DEPLOY_KEY_GONG` for `enxpower/pub`
+- `DEPLOY_KEY_STATE` for `enxpower/notion-doc-publisher-state`
+
+The content publish workflow uses GitHub's published SSH host keys from the
+GitHub metadata API and does not require a broad shared publisher PAT.
+
 ## Phase 1 State Migration
 
 Phase 1 downstream repositories contain older `.publisher_state.json` files

@@ -48,13 +48,26 @@ jobs:
       - name: Checkout publisher
         uses: actions/checkout@v4
 
+      - name: Load verified GitHub SSH host keys
+        id: github-host-keys
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo "known_hosts<<EOF"
+            gh api meta --jq '.ssh_keys[]' | sed 's/^/github.com /'
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Checkout private state
         if: ${{ vars.PHASE2_STATE_REPOSITORY != '' }}
         uses: actions/checkout@v4
         with:
           repository: ${{ vars.PHASE2_STATE_REPOSITORY }}
           path: state
-          token: ${{ secrets.PUBLISHER_STATE_TOKEN }}
+          ssh-key: ${{ secrets.DEPLOY_KEY_STATE }}
+          ssh-known-hosts: ${{ steps.github-host-keys.outputs.known_hosts }}
+          persist-credentials: false
 
       - name: Checkout ARCBOS target
         if: ${{ inputs.mode == 'apply' }}
@@ -62,7 +75,9 @@ jobs:
         with:
           repository: enxpower/docs-arcbos-v2
           path: targets/docs-arcbos-v2
-          token: ${{ secrets.PUBLISHER_DEPLOY_TOKEN }}
+          ssh-key: ${{ secrets.DEPLOY_KEY_ARCBOS }}
+          ssh-known-hosts: ${{ steps.github-host-keys.outputs.known_hosts }}
+          persist-credentials: false
 
       - name: Checkout ENERGIZE target
         if: ${{ inputs.mode == 'apply' }}
@@ -70,7 +85,9 @@ jobs:
         with:
           repository: enxpower/docs-energize-v2
           path: targets/docs-energize-v2
-          token: ${{ secrets.PUBLISHER_DEPLOY_TOKEN }}
+          ssh-key: ${{ secrets.DEPLOY_KEY_ENERGIZE }}
+          ssh-known-hosts: ${{ steps.github-host-keys.outputs.known_hosts }}
+          persist-credentials: false
 
       - name: Checkout AGIM target
         if: ${{ inputs.mode == 'apply' }}
@@ -78,7 +95,9 @@ jobs:
         with:
           repository: enxpower/agim-docs
           path: targets/agim-docs
-          token: ${{ secrets.PUBLISHER_DEPLOY_TOKEN }}
+          ssh-key: ${{ secrets.DEPLOY_KEY_AGIM }}
+          ssh-known-hosts: ${{ steps.github-host-keys.outputs.known_hosts }}
+          persist-credentials: false
 
       - name: Checkout GONG target
         if: ${{ inputs.mode == 'apply' }}
@@ -86,7 +105,9 @@ jobs:
         with:
           repository: enxpower/pub
           path: targets/pub
-          token: ${{ secrets.PUBLISHER_DEPLOY_TOKEN }}
+          ssh-key: ${{ secrets.DEPLOY_KEY_GONG }}
+          ssh-known-hosts: ${{ steps.github-host-keys.outputs.known_hosts }}
+          persist-credentials: false
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -106,7 +127,7 @@ jobs:
             /name: Dry-run incremental publish/ { skip=0 }
             skip != 1 { print }
           ' .github/workflows/incremental-content-publish.yml)"
-          blocked="$(printf '%s' "$operational_steps" | grep -E 'npm run assign-id|npm run ci:writeback|npm run writeback:routed|preview-publish|Share Token.*generate|Share Token.*rotate|PATCH https://api.notion.com|POST https://api.notion.com' || true)"
+          blocked="$(printf '%s' "$operational_steps" | grep -E 'npm run assign-id|npm run ci:writeback|npm run writeback:routed|preview-publish|PUBLISHER_DEPLOY_TOKEN|PUBLISHER_STATE_TOKEN|Share Token.*generate|Share Token.*rotate|PATCH https://api.notion.com|POST https://api.notion.com' || true)"
           if [ -n "$blocked" ]; then
             echo "Incremental content publish workflow references a blocked mutation or legacy publishing path."
             exit 1

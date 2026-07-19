@@ -400,8 +400,15 @@ test("incremental content publish workflow is manual, guarded, and route-bounded
   assert.ok(!workflow.includes("schedule:"));
   assert.ok(workflow.includes("confirm_production"));
   assert.ok(workflow.includes("PHASE2-INCREMENTAL-PUBLISH"));
-  assert.ok(workflow.includes("PUBLISHER_DEPLOY_TOKEN"));
-  assert.ok(workflow.includes("PUBLISHER_STATE_TOKEN"));
+  assert.ok(workflow.includes("DEPLOY_KEY_ARCBOS"));
+  assert.ok(workflow.includes("DEPLOY_KEY_ENERGIZE"));
+  assert.ok(workflow.includes("DEPLOY_KEY_AGIM"));
+  assert.ok(workflow.includes("DEPLOY_KEY_GONG"));
+  assert.ok(workflow.includes("DEPLOY_KEY_STATE"));
+  assert.ok(workflow.includes("gh api meta --jq '.ssh_keys[]'"));
+  assert.ok(workflow.includes("PUBLISHER_DEPLOY_TOKEN|PUBLISHER_STATE_TOKEN"));
+  assert.ok(!operationalWorkflow.includes("PUBLISHER_DEPLOY_TOKEN"));
+  assert.ok(!operationalWorkflow.includes("PUBLISHER_STATE_TOKEN"));
   assert.ok(workflow.includes("PHASE2_STATE_PATH: state/incremental-state.json"));
   assert.ok(workflow.includes('"GONG":"targets/pub"'));
   assert.ok(!workflow.includes("lifecycle_writeback"));
