@@ -82,6 +82,31 @@ test("NotionClient.updateDocId writes DOC_ID only to the matching page", async (
   });
 });
 
+test("NotionClient retries Notion 429 responses without exposing credentials", async () => {
+  const originalFetch = globalThis.fetch;
+  const calls: string[] = [];
+  globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    calls.push(String(input));
+    assert.equal((init?.headers as Record<string, string>).Authorization, "Bearer test-notion-token");
+    if (calls.length === 1) {
+      return new Response(JSON.stringify({ message: "rate limited" }), {
+        status: 429,
+        headers: { "retry-after": "0" }
+      });
+    }
+    return new Response(JSON.stringify({ results: [], has_more: false }), { status: 200 });
+  };
+
+  try {
+    const client = new NotionClient(makeConfig());
+    const pages = await client.queryDatabase();
+    assert.deepEqual(pages, []);
+    assert.equal(calls.length, 2);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 /* ---------------- Published URL writeback ---------------- */
 
 test("NotionWriteback.updateDocumentSuccess writes URL only to the matching page", async () => {

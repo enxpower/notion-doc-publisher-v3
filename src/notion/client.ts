@@ -87,27 +87,47 @@ export class NotionClient {
   }
 
   private async request<T>(path: string, init: RequestInit): Promise<T> {
-    let response: Response;
-    try {
-      response = await fetch(`https://api.notion.com/v1${path}`, {
-        ...init,
-        headers: {
-          Authorization: `Bearer ${this.config.notionToken}`,
-          "Content-Type": "application/json",
-          "Notion-Version": "2022-06-28",
-          ...(init.headers ?? {})
-        }
-      });
-    } catch (error) {
-      throw new UserFacingError(`Could not reach Notion API: ${error instanceof Error ? error.message : String(error)}`);
-    }
+    let lastRateLimitText = "";
+    for (let attempt = 0; attempt < MAX_NOTION_REQUEST_ATTEMPTS; attempt += 1) {
+      let response: Response;
+      try {
+        response = await fetch(`https://api.notion.com/v1${path}`, {
+          ...init,
+          headers: {
+            Authorization: `Bearer ${this.config.notionToken}`,
+            "Content-Type": "application/json",
+            "Notion-Version": "2022-06-28",
+            ...(init.headers ?? {})
+          }
+        });
+      } catch (error) {
+        throw new UserFacingError(`Could not reach Notion API: ${error instanceof Error ? error.message : String(error)}`);
+      }
 
-    if (!response.ok) {
-      const text = await response.text();
-      throw new UserFacingError(`Notion API request failed (${response.status}): ${summarize(text)}`);
+      if (response.status === 429 && attempt < MAX_NOTION_REQUEST_ATTEMPTS - 1) {
+        lastRateLimitText = await response.text();
+        await waitForNotionRetry(response.headers.get("retry-after"));
+        continue;
+      }
+
+      if (!response.ok) {
+        const text = response.status === 429 && lastRateLimitText ? lastRateLimitText : await response.text();
+        throw new UserFacingError(`Notion API request failed (${response.status}): ${summarize(text)}`);
+      }
+      return (await response.json()) as T;
     }
-    return (await response.json()) as T;
+    throw new UserFacingError("Notion API request failed (429): rate limit retry budget exhausted.");
   }
+}
+
+const MAX_NOTION_REQUEST_ATTEMPTS = 5;
+
+async function waitForNotionRetry(retryAfter: string | null): Promise<void> {
+  const seconds = retryAfter ? Number(retryAfter) : 1;
+  const boundedSeconds = Number.isFinite(seconds) && seconds >= 0
+    ? Math.min(seconds, 10)
+    : 1;
+  await new Promise((resolve) => setTimeout(resolve, boundedSeconds * 1000));
 }
 
 function summarize(text: string): string {
