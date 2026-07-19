@@ -1,5 +1,6 @@
 import { UserFacingError, type AppConfig } from "../config.js";
 import { NotionClient, type NotionDatabase } from "./client.js";
+import { assertNotionMutationAllowed } from "./read-only-guard.js";
 
 export type BuildStatus = "pending" | "success" | "failed" | "skipped";
 
@@ -24,10 +25,12 @@ export class NotionWriteback {
   }
 
   async updateBuildStarted(pageId: string, runId: string, message = "Preview publish started"): Promise<void> {
+    assertNotionMutationAllowed("updateBuildStarted");
     await this.updateStatus(pageId, "pending", message, runId);
   }
 
   async updateDocumentSuccess(pageId: string, url: string, runId: string, message = "Published successfully"): Promise<void> {
+    assertNotionMutationAllowed("updateDocumentSuccess");
     await this.client.updatePageProperties(pageId, {
       PUBLISHED_URL: { url },
       PUBLISHED_AT: { date: { start: new Date().toISOString() } },
@@ -38,10 +41,12 @@ export class NotionWriteback {
   }
 
   async updateDocumentSkipped(pageId: string, message: string, runId: string): Promise<void> {
+    assertNotionMutationAllowed("updateDocumentSkipped");
     await this.updateStatus(pageId, "skipped", message, runId);
   }
 
   async updateDocumentFailed(pageId: string, message: string, runId: string): Promise<void> {
+    assertNotionMutationAllowed("updateDocumentFailed");
     await this.updateStatus(pageId, "failed", message, runId);
   }
 
@@ -57,6 +62,7 @@ export class NotionWriteback {
     pageId: string,
     props: { shareToken?: string; namespace?: string; portalCategory?: string }
   ): Promise<void> {
+    assertNotionMutationAllowed("writeAutoFillProperties");
     const updates: Record<string, unknown> = {};
     if (props.shareToken !== undefined) {
       updates["Share Token"] = { rich_text: [{ type: "text", text: { content: props.shareToken } }] };

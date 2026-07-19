@@ -93,6 +93,7 @@ export async function buildRoutedSites(input: {
   outputBaseRoot: string;
   previousSnapshots?: Record<string, string[]>;
   now?: () => string;
+  prevalidated?: boolean;
 }): Promise<RoutedBuildResult> {
   const buildTimestamp = input.now?.() ?? new Date().toISOString();
   const outputBaseRoot = path.resolve(input.outputBaseRoot);
@@ -100,7 +101,9 @@ export async function buildRoutedSites(input: {
   await fs.mkdir(outputBaseRoot, { recursive: true });
 
   const documents = input.documents.map(cloneDocument);
-  validateDocuments(documents, input.config);
+  if (input.prevalidated !== true) {
+    validateDocuments(documents, input.config);
+  }
   const candidates = documents.filter((document) => isPublishableCandidate(document, input.config));
   const routed = createRoutedPublishingPlan(candidates, input.routes);
   const manifests: RoutedBrandManifest[] = [];

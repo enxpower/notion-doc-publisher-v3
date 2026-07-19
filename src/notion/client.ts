@@ -1,4 +1,5 @@
 import { UserFacingError, type AppConfig } from "../config.js";
+import { assertNotionMutationAllowed } from "./read-only-guard.js";
 
 export type NotionPage = {
   id: string;
@@ -56,6 +57,7 @@ export class NotionClient {
   }
 
   async updateDocId(pageId: string, docId: string): Promise<void> {
+    assertNotionMutationAllowed("updateDocId");
     await this.request(`/pages/${pageId}`, {
       method: "PATCH",
       body: JSON.stringify({
@@ -73,6 +75,7 @@ export class NotionClient {
   }
 
   async updatePageProperties(pageId: string, properties: Record<string, unknown>): Promise<void> {
+    assertNotionMutationAllowed("updatePageProperties");
     await this.request(`/pages/${pageId}`, {
       method: "PATCH",
       body: JSON.stringify({ properties })

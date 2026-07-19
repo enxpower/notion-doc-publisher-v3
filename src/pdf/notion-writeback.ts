@@ -6,6 +6,7 @@
  * Does NOT reuse or call the existing preview writeback path.
  */
 import { NotionClient } from "../notion/client.js";
+import { assertNotionMutationAllowed } from "../notion/read-only-guard.js";
 import { UserFacingError } from "../config.js";
 import type { AppConfig } from "../config.js";
 import type { PdfWritebackPayload } from "./types.js";
@@ -88,6 +89,7 @@ export async function writePdfResult(
   payload: PdfWritebackPayload,
   config: AppConfig,
 ): Promise<void> {
+  assertNotionMutationAllowed("writePdfResult");
   const properties = buildPdfProperties(payload);
   if (Object.keys(properties).length === 0) return;
   const client = new NotionClient(config);
