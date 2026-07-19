@@ -193,6 +193,66 @@ test("unchanged URLs are skipped and incorrect old URLs update once", async () =
   assert.equal(second.urlUpdateCount, 0);
 });
 
+test("current ENERGIZE writeback plan audits newly publishable rows without touching remediated rows", async () => {
+  const remediated = makeDoc("ENERGIZE", "page-remediated", {
+    docId: "ENERGIZE-AGR-2606-0600",
+    canonicalPath: "/docs/ENERGIZE-AGR-2606-0600/",
+    visibility: "Public",
+    publishedUrl: "https://docs.energizeos.com/docs/ENERGIZE-AGR-2606-0600/"
+  });
+  const newlyPublishedBlank = makeDoc("ENERGIZE", "page-newly-published", {
+    docId: "ENERGIZE-AGR-2606-0601",
+    canonicalPath: "/docs/ENERGIZE-AGR-2606-0601/",
+    visibility: "Public",
+    publishedUrl: ""
+  });
+  const wrongDomain = makeDoc("ENERGIZE", "page-wrong-domain", {
+    docId: "ENERGIZE-AGR-2606-0602",
+    canonicalPath: "/docs/ENERGIZE-AGR-2606-0602/",
+    visibility: "Public",
+    publishedUrl: "https://ref.arcbos.com/docs/ENERGIZE-AGR-2606-0602/"
+  });
+  const draft = makeDoc("ENERGIZE", "page-draft", {
+    docId: "ENERGIZE-AGR-2606-0603",
+    canonicalPath: "/docs/ENERGIZE-AGR-2606-0603/",
+    visibility: "Public",
+    publish: false
+  });
+  const originalStage10Set = await buildWritebackFixture({ documents: [remediated] });
+  const currentDatabaseSet = await buildWritebackFixture({
+    documents: [remediated, newlyPublishedBlank, wrongDomain, draft]
+  });
+  const client = new MockWritebackClient(currentDatabaseSet.documents);
+  const execution = await executeRoutedUrlWriteback({ bundle: currentDatabaseSet.bundle, client });
+  const verification = await verifyRoutedUrlWriteback({ bundle: currentDatabaseSet.bundle, client });
+
+  assert.equal(originalStage10Set.bundle.plan.records.length, 1);
+  assert.equal(originalStage10Set.bundle.plan.urlUpdateCount, 0);
+  assert.equal(currentDatabaseSet.bundle.plan.records.length, 4);
+  assert.equal(currentDatabaseSet.bundle.plan.eligibleByBrand.ENERGIZE, 3);
+  assert.equal(currentDatabaseSet.bundle.plan.unchangedUrlCount, 1);
+  assert.equal(currentDatabaseSet.bundle.plan.urlUpdateCount, 2);
+  assert.equal(currentDatabaseSet.bundle.plan.skippedCount, 1);
+  assert.equal(
+    currentDatabaseSet.bundle.plan.records.find((record) => record.alias === "WRITEBACK-001")!.action,
+    "unchanged"
+  );
+  assert.equal(
+    currentDatabaseSet.bundle.plan.records.find((record) => record.alias === "WRITEBACK-002")!.reason,
+    "URL_UPDATE_REQUIRED"
+  );
+  assert.equal(
+    currentDatabaseSet.bundle.plan.records.find((record) => record.alias === "WRITEBACK-003")!.wouldBreakExistingPublishedUrl,
+    true
+  );
+  assert.equal(execution.successfulUpdateCount, 2);
+  assert.equal(verification.correctCount, 2);
+  assert.deepEqual(
+    client.calls.map((call) => call.pageId).sort(),
+    ["page-newly-published", "page-wrong-domain"]
+  );
+});
+
 test("duplicate Notion page updates are prevented", async () => {
   const documents = [
     makeDoc("ARCBOS", "same-page", {
