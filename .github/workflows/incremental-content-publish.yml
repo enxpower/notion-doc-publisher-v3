@@ -15,6 +15,10 @@ on:
         description: "Type PHASE2-INCREMENTAL-PUBLISH to permit apply mode"
         required: false
         default: ""
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - ".phase2-ops/command.json"
 
 permissions:
   contents: read
@@ -34,19 +38,47 @@ jobs:
       PUBLISHABLE_STATUSES: ${{ vars.PUBLISHABLE_STATUSES || 'Final' }}
       BRAND_TOKENS_JSON: '{"ARCBOS":"ARCBOS","ENERGIZE":"ENERGIZE","AGIM":"AGIM","GONG":"GONG"}'
       DOCUMENT_TYPE_TOKENS_JSON: ${{ vars.DOCUMENT_TYPE_TOKENS_JSON || secrets.DOCUMENT_TYPE_TOKENS_JSON }}
-      PHASE2_STATE_PATH: state/incremental-state.json
+      PHASE2_PREVIOUS_STATE_PATH: dist/phase2-run/previous-state.json
+      PHASE2_STATE_PATH: dist/phase2-run/next-state.json
+      INCREMENTAL_PLAN_PATH: dist/incremental-plan/plan.json
       INCREMENTAL_APPLY_RESULT_PATH: dist/incremental-apply/result.json
+      INCREMENTAL_VERIFICATION_RESULT_PATH: dist/incremental-apply/verification.json
+      INCREMENTAL_WRITEBACK_RESULT_PATH: dist/incremental-apply/writeback.json
       PHASE2_DEPLOYED_REPO_ROOTS_JSON: '{"ENERGIZE":"targets/docs-energize-v2","AGIM":"targets/agim-docs","GONG":"targets/pub"}'
 
     steps:
-      - name: Validate apply confirmation
-        if: ${{ inputs.mode == 'apply' && inputs.confirm_production != 'PHASE2-INCREMENTAL-PUBLISH' }}
-        run: |
-          echo "Apply mode requires exact confirmation."
-          exit 1
-
       - name: Checkout publisher
         uses: actions/checkout@v4
+
+      - name: Resolve execution mode
+        id: execution
+        shell: bash
+        env:
+          DISPATCH_MODE: ${{ inputs.mode }}
+          DISPATCH_CONFIRMATION: ${{ inputs.confirm_production }}
+          PR_HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+          PR_HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            if [ "$PR_HEAD_REPOSITORY" != "$GITHUB_REPOSITORY" ] || [ "$PR_HEAD_BRANCH" != "ops/phase2-seal" ]; then
+              echo "Production PR trigger is restricted to the same-repository ops/phase2-seal branch."
+              exit 1
+            fi
+            jq -e '.mode == "apply" and .confirm_production == "PHASE2-INCREMENTAL-PUBLISH"' .phase2-ops/command.json >/dev/null
+            mode="apply"
+          else
+            mode="${DISPATCH_MODE:-dry-run}"
+            if [ "$mode" = "apply" ] && [ "$DISPATCH_CONFIRMATION" != "PHASE2-INCREMENTAL-PUBLISH" ]; then
+              echo "Apply mode requires exact confirmation."
+              exit 1
+            fi
+          fi
+          if [ "$mode" != "dry-run" ] && [ "$mode" != "apply" ]; then
+            echo "Unsupported mode: $mode"
+            exit 1
+          fi
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
 
       - name: Load verified GitHub SSH host keys
         id: github-host-keys
@@ -60,7 +92,6 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Checkout private state
-        if: ${{ vars.PHASE2_STATE_REPOSITORY != '' }}
         uses: actions/checkout@v4
         with:
           repository: ${{ vars.PHASE2_STATE_REPOSITORY }}
@@ -70,7 +101,7 @@ jobs:
           persist-credentials: false
 
       - name: Checkout ENERGIZE target
-        if: ${{ inputs.mode == 'apply' }}
+        if: ${{ steps.execution.outputs.mode == 'apply' }}
         uses: actions/checkout@v4
         with:
           repository: enxpower/docs-energize-v2
@@ -80,7 +111,7 @@ jobs:
           persist-credentials: false
 
       - name: Checkout AGIM target
-        if: ${{ inputs.mode == 'apply' }}
+        if: ${{ steps.execution.outputs.mode == 'apply' }}
         uses: actions/checkout@v4
         with:
           repository: enxpower/agim-docs
@@ -90,7 +121,7 @@ jobs:
           persist-credentials: false
 
       - name: Checkout GONG target
-        if: ${{ inputs.mode == 'apply' }}
+        if: ${{ steps.execution.outputs.mode == 'apply' }}
         uses: actions/checkout@v4
         with:
           repository: enxpower/pub
@@ -108,60 +139,132 @@ jobs:
       - name: Install
         run: npm ci
 
+      - name: Prepare isolated state transaction
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f state/incremental-state.json
+          mkdir -p "$(dirname "$PHASE2_PREVIOUS_STATE_PATH")" "$(dirname "$PHASE2_STATE_PATH")"
+          cp state/incremental-state.json "$PHASE2_PREVIOUS_STATE_PATH"
+          cp state/incremental-state.json "$PHASE2_STATE_PATH"
+
       - name: Validate workflow safety
         shell: bash
         run: |
           set -euo pipefail
-          operational_steps="$(awk '
-            /name: Validate workflow safety/ { skip=1 }
-            /name: Dry-run incremental publish/ { skip=0 }
-            skip != 1 { print }
-          ' .github/workflows/incremental-content-publish.yml)"
-          blocked="$(printf '%s' "$operational_steps" | grep -E 'npm run assign-id|npm run ci:writeback|npm run writeback:routed|preview-publish|PUBLISHER_DEPLOY_TOKEN|PUBLISHER_STATE_TOKEN|Share Token.*generate|Share Token.*rotate|PATCH https://api.notion.com|POST https://api.notion.com' || true)"
+          blocked="$(grep -E 'npm run assign-id|npm run ci:writeback|npm run writeback:routed|preview-publish|PUBLISHER_DEPLOY_TOKEN|PUBLISHER_STATE_TOKEN|Share Token.*generate|Share Token.*rotate|PATCH https://api.notion.com|POST https://api.notion.com' .github/workflows/incremental-content-publish.yml || true)"
           if [ -n "$blocked" ]; then
             echo "Incremental content publish workflow references a blocked mutation or legacy publishing path."
             exit 1
           fi
 
+      - name: Create incremental lifecycle plan
+        run: npm run plan:incremental
+
       - name: Dry-run incremental publish
-        if: ${{ inputs.mode == 'dry-run' }}
+        if: ${{ steps.execution.outputs.mode == 'dry-run' }}
         run: npm run publish:incremental:dry-run
 
       - name: Apply incremental output locally
-        if: ${{ inputs.mode == 'apply' }}
+        if: ${{ steps.execution.outputs.mode == 'apply' }}
         env:
           INCREMENTAL_LIFECYCLE_WRITEBACK: "false"
         run: npm run publish:incremental
 
-      - name: Commit private state
-        if: ${{ inputs.mode == 'apply' && vars.PHASE2_STATE_REPOSITORY != '' }}
+      - name: Validate target repository boundaries
+        if: ${{ steps.execution.outputs.mode == 'apply' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          validate_paths() {
+            repo="$1"
+            allowed="$2"
+            changed="$(git -C "$repo" diff --name-only --diff-filter=ACDMRTUXB || true)"
+            if [ -z "$changed" ]; then
+              return 0
+            fi
+            invalid="$(printf '%s\n' "$changed" | grep -Ev "$allowed" || true)"
+            if [ -n "$invalid" ]; then
+              echo "Blocked publisher changes outside the approved boundary in $repo:"
+              printf '%s\n' "$invalid"
+              exit 1
+            fi
+          }
+          validate_paths targets/docs-energize-v2 '^(clients|internal|pdf|assets)/'
+          validate_paths targets/agim-docs '^(clients|internal|pdf|assets)/'
+          validate_paths targets/pub '^gong-docs/'
+
+      - name: Commit target repositories
+        if: ${{ steps.execution.outputs.mode == 'apply' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist/phase2-run
+          : > dist/phase2-run/target-commits.txt
+          for spec in \
+            "ENERGIZE:targets/docs-energize-v2" \
+            "AGIM:targets/agim-docs" \
+            "GONG:targets/pub"; do
+            brand="${spec%%:*}"
+            repo="${spec#*:}"
+            git -C "$repo" config user.name "github-actions[bot]"
+            git -C "$repo" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            if git -C "$repo" status --short | grep -q .; then
+              git -C "$repo" add -A
+              git -C "$repo" commit -m "chore: publish incremental document updates"
+              git -C "$repo" push
+              printf '%s %s\n' "$brand" "$(git -C "$repo" rev-parse HEAD)" >> dist/phase2-run/target-commits.txt
+            else
+              printf '%s unchanged\n' "$brand" >> dist/phase2-run/target-commits.txt
+            fi
+          done
+
+      - name: Verify live deployment transaction
+        if: ${{ steps.execution.outputs.mode == 'apply' }}
+        run: npm run verify:incremental-deploy
+
+      - name: Persist verified private state
+        if: ${{ steps.execution.outputs.mode == 'apply' }}
         working-directory: state
         shell: bash
         run: |
           set -euo pipefail
+          cp "../$PHASE2_STATE_PATH" incremental-state.json
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add incremental-state.json
           if git diff --cached --quiet; then
             echo "No private state changes."
           else
-            git commit -m "chore: update incremental publisher state"
+            git commit -m "chore: commit verified incremental publisher state"
             git push
           fi
 
-      - name: Commit target repositories
-        if: ${{ inputs.mode == 'apply' }}
+      - name: Write verified lifecycle results to Notion
+        if: ${{ steps.execution.outputs.mode == 'apply' }}
+        run: npm run writeback:incremental
+
+      - name: Publish run summary
+        if: ${{ always() }}
         shell: bash
         run: |
-          set -euo pipefail
-          for repo in targets/docs-energize-v2 targets/agim-docs targets/pub; do
-            git -C "$repo" config user.name "github-actions[bot]"
-            git -C "$repo" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            if git -C "$repo" status --short | grep -q .; then
-              git -C "$repo" add .
-              git -C "$repo" commit -m "chore: publish incremental document updates"
-              git -C "$repo" push
-            else
-              echo "No target changes in $repo."
+          {
+            echo "## Incremental Content Publish"
+            echo ""
+            echo "Mode: ${{ steps.execution.outputs.mode }}"
+            if [ -f "$INCREMENTAL_APPLY_RESULT_PATH" ]; then
+              echo ""
+              echo '```json'
+              jq '{mode, renderedDocumentCount, generatedPdfCount, deployedBrandCount, copiedFileCount, deletedFileCount, notionMutationCount, brandResults, recordResults}' "$INCREMENTAL_APPLY_RESULT_PATH"
+              echo '```'
             fi
-          done
+            if [ -f dist/phase2-run/target-commits.txt ]; then
+              echo ""
+              echo "Target commits:"
+              sed 's/^/- /' dist/phase2-run/target-commits.txt
+            fi
+            if [ -f "$INCREMENTAL_WRITEBACK_RESULT_PATH" ]; then
+              echo ""
+              echo "Notion mutations: $(jq -r '.mutationCount' "$INCREMENTAL_WRITEBACK_RESULT_PATH")"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
