@@ -39,8 +39,10 @@ await runCli(async () => {
   const previousState = await readOptionalState(statePath);
   const documents = testMode ? routedDryRunDocuments() : await loadDocuments(config);
   const plan = createIncrementalPlan({ documents, routes, config, previousState });
-  if (mode === "apply" && process.env.INCREMENTAL_EXPECTED_PLAN_PATH?.trim()) {
-    const expectedPlan = await readExpectedPlan(path.resolve(process.env.INCREMENTAL_EXPECTED_PLAN_PATH));
+  const expectedPlanPath = process.env.INCREMENTAL_EXPECTED_PLAN_PATH?.trim() ||
+    (process.env.GITHUB_ACTIONS === "true" ? process.env.INCREMENTAL_PLAN_PATH?.trim() : undefined);
+  if (mode === "apply" && expectedPlanPath) {
+    const expectedPlan = await readExpectedPlan(path.resolve(expectedPlanPath));
     assertIncrementalPlanUnchanged(expectedPlan, plan);
   }
   const repositoryRoots = testMode
