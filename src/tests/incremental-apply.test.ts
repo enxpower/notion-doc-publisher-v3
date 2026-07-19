@@ -139,7 +139,7 @@ test("incremental apply REMOVE deletes only prior manifest-owned files and marks
   await assertFileExists(path.join(fixture.repositories.ENERGIZE!, "assets", "shared.css"));
 });
 
-test("incremental apply MOVE preserves identity, writes new route, and removes old route", async () => {
+test("incremental apply MOVE preserves identity, keeps the shared PDF, and removes only the old route", async () => {
   const fixture = await makeFixture();
   const base = structuredClone(fixture.documents[1]!);
   const previousState = successfulState([base], fixture.routes, fixture.config);
@@ -166,11 +166,12 @@ test("incremental apply MOVE preserves identity, writes new route, and removes o
   });
 
   assert.equal(plan.records[0]!.action, "MOVE");
-  assert.equal(result.deletedFileCount, 2);
+  assert.equal(result.deletedFileCount, 1);
   assert.equal(result.nextState.records[0]!.docId, base.meta.docId);
   assert.equal(result.nextState.records[0]!.shareToken, base.meta.shareToken);
   await assertFileMissing(path.join(fixture.repositories.ENERGIZE!, "clients", "energizeclient01", "index.html"));
   await assertFileExists(path.join(fixture.repositories.ENERGIZE!, "internal", "energizeclient01", "index.html"));
+  await assertFileExists(path.join(fixture.repositories.ENERGIZE!, "pdf", "ENERGIZE-MEM-2606-0002.pdf"));
 });
 
 test("incremental apply failed UPDATE preserves prior output and successful state", async () => {
