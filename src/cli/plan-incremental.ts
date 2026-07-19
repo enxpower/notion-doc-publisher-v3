@@ -6,8 +6,12 @@ import { routedDryRunDocuments, loadRoutedDryRunConfig } from "../fixtures/route
 import { enableNotionReadOnlyMode } from "../notion/read-only-guard.js";
 import { loadDocuments } from "./shared.js";
 import { createIncrementalPlan, type IncrementalStateManifest } from "../routing/incremental.js";
-import { loadRoutedReadonlyConfigFromEnvironment } from "../routing/routed-readonly.js";
+import {
+  applyReadOnlyPersistedFieldRequirements,
+  loadRoutedReadonlyConfigFromEnvironment
+} from "../routing/routed-readonly.js";
 import { loadBrandRoutes } from "../routing/routes.js";
+import { validateDocuments } from "../validate/validate.js";
 
 await runCli(async () => {
   const routes = await loadBrandRoutes();
@@ -24,6 +28,8 @@ await runCli(async () => {
   const restoreReadOnly = enableNotionReadOnlyMode("plan:incremental");
   try {
     const documents = testMode ? routedDryRunDocuments() : await loadDocuments(config);
+    validateDocuments(documents, config);
+    applyReadOnlyPersistedFieldRequirements(documents, config);
     const plan = createIncrementalPlan({
       documents,
       routes,
