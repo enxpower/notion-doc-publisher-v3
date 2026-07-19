@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import { loadConfigOrThrow, loadPreviewDeployConfig, runCli, UserFacingError, type AppConfig } from "../config.js";
 import { isPrivateLinkVisibility, type BuildReport, type ValidationIssue } from "../model/document.js";
 import { NotionWriteback } from "../notion/writeback.js";
-import { computeBrandCanonicalUrl, type BrandRoute } from "../routing/brand-routing.js";
+import { computeBrandCanonicalUrl, normalizeBrand, type BrandRoute } from "../routing/brand-routing.js";
 import { loadBrandRoutes } from "../routing/routes.js";
 
 type ReportDocument = BuildReport["documents"][number];
@@ -22,6 +22,7 @@ await runCli(async () => {
   const buildFailed = process.env.BUILD_RESULT === "failure" || validationReport.errors.length > 0;
   const deployFailed = preview.enabled && process.env.DEPLOY_RESULT !== "success";
   const mutatedPageIds = new Set<string>();
+  let inScopeCount = 0;
 
   if (validationReport.documents.length === 0 && buildFailed) {
     console.warn(
@@ -32,6 +33,11 @@ await runCli(async () => {
   }
 
   for (const document of validationReport.documents) {
+    if (!isBrandInPreviewScope(document, config)) {
+      continue;
+    }
+    inScopeCount += 1;
+
     if (buildFailed && errorMessagesByPage.has(document.pageId)) {
       await updatePageOnce(mutatedPageIds, document.pageId, () =>
         writeback.updateDocumentFailed(document.pageId, errorMessagesByPage.get(document.pageId)!.join("; "), preview.runId)
@@ -77,8 +83,16 @@ await runCli(async () => {
     );
   }
 
-  console.log(`Notion preview write-back updated ${validationReport.documents.length} document(s).`);
+  console.log(`Notion preview write-back updated ${mutatedPageIds.size} of ${inScopeCount} in-scope document(s).`);
 });
+
+function isBrandInPreviewScope(document: ReportDocument, config: AppConfig): boolean {
+  if (config.allowedBrands === null) {
+    return true;
+  }
+  const brand = normalizeBrand(document.brand);
+  return Boolean(brand && config.allowedBrands.has(brand));
+}
 
 async function readReport(filePath: string): Promise<BuildReport> {
   try {
