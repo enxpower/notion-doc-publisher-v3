@@ -152,7 +152,8 @@ export async function executeIncrementalApply(input: {
       if (!route || !repositoryRoot) {
         throw new UserFacingError(`Missing staged route or repository root for ${brand}.`);
       }
-      for (const file of manifest.files) {
+      const filesToCopy = filesToCopyForBrand(manifest.files, renderRecords, brand, route);
+      for (const file of filesToCopy) {
         if (!isSafeRelativePublicPath(file)) {
           throw new UserFacingError(`Unsafe staged artifact path is blocked: ${file}`);
         }
@@ -167,7 +168,7 @@ export async function executeIncrementalApply(input: {
       builtBrands.add(brand);
       const brandResult = brandResults.get(brand);
       if (brandResult) {
-        brandResult.copiedFileCount += manifest.files.length;
+        brandResult.copiedFileCount += filesToCopy.length;
         brandResult.deployed = true;
       }
     }
@@ -348,6 +349,45 @@ function addDeploymentRoot(file: string, route: BrandRoute): string {
     return file;
   }
   return `${deploymentRoot}/${file}`;
+}
+
+function filesToCopyForBrand(
+  manifestFiles: string[],
+  records: IncrementalPlanRecord[],
+  brand: string,
+  route: BrandRoute
+): string[] {
+  const wanted = new Set<string>();
+  for (const record of records) {
+    if (normalizeBrand(record.brand) !== brand || !record.desired) {
+      continue;
+    }
+    for (const file of record.desired.ownedFiles) {
+      wanted.add(removeDeploymentRoot(file, route));
+    }
+  }
+
+  for (const file of manifestFiles) {
+    if (isRuntimeAssetPath(file)) {
+      wanted.add(file);
+    }
+  }
+
+  return manifestFiles.filter((file) => wanted.has(file)).sort();
+}
+
+function removeDeploymentRoot(file: string, route: BrandRoute): string {
+  const deploymentRoot = route.deploymentRoot?.replace(/^\/+|\/+$/g, "") ?? "";
+  const normalized = file.replace(/^\/+/, "");
+  if (deploymentRoot && normalized.startsWith(`${deploymentRoot}/`)) {
+    return normalized.slice(deploymentRoot.length + 1);
+  }
+  return normalized;
+}
+
+function isRuntimeAssetPath(file: string): boolean {
+  return file.startsWith("assets/css/") ||
+    /^assets\/[^/]+\.(?:ico|png|jpg|jpeg|svg|webp)$/i.test(file);
 }
 
 function lifecycleWritebackForRecord(
