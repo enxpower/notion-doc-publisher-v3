@@ -1,0 +1,43 @@
+{
+  "ARCBOS": {
+    "brand": "ARCBOS",
+    "targetRepository": "enxpower/docs-arcbos-v2",
+    "targetDomain": "https://ref.arcbos.com",
+    "cname": "ref.arcbos.com",
+    "routeId": "arcbos",
+    "presentationProfileKey": "ARCBOS",
+    "allowedUrlNamespaces": ["docs", "clients", "partners", "internal"],
+    "repositoryConfirmed": true
+  },
+  "ENERGIZE": {
+    "brand": "ENERGIZE",
+    "targetRepository": "enxpower/docs-energize-v2",
+    "targetDomain": "https://docs.energizeos.com",
+    "cname": "docs.energizeos.com",
+    "routeId": "energize",
+    "presentationProfileKey": "ENERGIZE",
+    "allowedUrlNamespaces": ["docs", "clients", "partners", "internal"],
+    "repositoryConfirmed": true
+  },
+  "AGIM": {
+    "brand": "AGIM",
+    "targetRepository": "enxpower/agim-docs",
+    "targetDomain": "https://docs.agim.ca",
+    "cname": "docs.agim.ca",
+    "routeId": "agim",
+    "presentationProfileKey": "AGIM",
+    "allowedUrlNamespaces": ["docs", "clients", "partners", "internal"],
+    "repositoryConfirmed": true
+  },
+  "GONG": {
+    "brand": "GONG",
+    "targetRepository": null,
+    "targetDomain": "https://enxpower.com",
+    "cname": "enxpower.com",
+    "routeId": "gong",
+    "presentationProfileKey": null,
+    "allowedUrlNamespaces": ["docs", "clients", "partners", "internal"],
+    "repositoryConfirmed": false,
+    "blockedReason": "No confirmed GONG target repository exists in committed repository governance/config."
+  }
+}

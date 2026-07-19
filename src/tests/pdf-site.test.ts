@@ -18,7 +18,72 @@ import { strict as assert } from "node:assert";
 import { test } from "node:test";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { renderActions } from "../render/render-html.js";
+import type { AppConfig } from "../config.js";
+import type { DocumentModel } from "../model/document.js";
+import { emptyValidation } from "../model/document.js";
+import { renderActions, renderDocumentHtml } from "../render/render-html.js";
+
+function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
+  return {
+    notionToken: "test-notion-token",
+    notionDatabaseId: "test-database-id",
+    targetSiteDomain: "https://docs.example.test",
+    publishableStatuses: new Set(["Approved", "Published"]),
+    allowedVisibility: new Set(["Public"]),
+    allowedBrands: null,
+    docIdYearMonth: "2606",
+    brandTokens: { ARCBOS: "ARCBOS" },
+    documentTypeTokens: { Agreement: "AGR" },
+    brandProfiles: {
+      ARCBOS: {
+        displayName: "ARCBOS",
+        tagline: "Engineering documents",
+        shareImage: "arcbos-share-preview.png"
+      }
+    },
+    registerPublic: false,
+    robotsDisallowDocs: false,
+    allowMissingShareToken: false,
+    legacyUnlistedDocsPath: false,
+    autoGenerateShareToken: true,
+    autoFillPrivateNamespace: true,
+    autoFillPortalCategory: true,
+    legacyPrivateDocIdUrls: false,
+    ...overrides
+  };
+}
+
+function makeDoc(overrides: Partial<DocumentModel["meta"]> = {}): DocumentModel {
+  return {
+    meta: {
+      docId: "ARCBOS-AGR-2606-0008",
+      title: "Test Agreement",
+      brand: { label: "ARCBOS", token: "ARCBOS", slug: "arcbos" },
+      client: { label: "Test Client", slug: "test-client" },
+      project: { label: "Test Project", slug: "test-project" },
+      documentType: { label: "Agreement", token: "AGR", slug: "agreement" },
+      version: "v1.0",
+      status: "Approved",
+      visibility: "Public",
+      publish: true,
+      portalListed: true,
+      shareToken: "",
+      privateLinkNamespace: "",
+      category: "",
+      portalCategory: "",
+      canonicalPath: "/docs/ARCBOS-AGR-2606-0008/",
+      ...overrides
+    },
+    content: [{ type: "paragraph", id: "p1", richText: [{ text: "This is stable social preview body text." }] }],
+    assets: [],
+    source: {
+      notionPageId: "page-html",
+      notionDatabaseId: "test-database-id",
+      lastEditedTime: "2026-06-15T12:00:00.000Z"
+    },
+    validation: emptyValidation()
+  };
+}
 
 // ── 1. pdf:site script exists ─────────────────────────────────────────────────
 
@@ -124,6 +189,36 @@ test("renderActions returns only Print button when docId is absent", () => {
   const html = renderActions();
   assert.ok(html.includes("window.print()"), "Print button must always be present");
   assert.ok(!html.includes("Download PDF"), "Download PDF must be absent when no docId");
+});
+
+test("rendered document HTML keeps print, PDF, metadata, social preview, and page structure", async () => {
+  const html = await renderDocumentHtml(makeDoc(), makeConfig());
+
+  assert.ok(html.includes('onclick="window.print()"'), "rendered HTML must include the existing print action");
+  assert.ok(html.includes("Download PDF"), "rendered HTML must include the PDF download action");
+  assert.ok(
+    html.includes('href="../../pdf/ARCBOS-AGR-2606-0008.pdf"'),
+    "rendered PDF link must remain compatible with two-level document paths"
+  );
+  assert.ok(html.includes("<title>Test Agreement"), "title metadata must remain present");
+  assert.ok(html.includes('<meta name="description"'), "description metadata must remain present");
+  assert.ok(
+    html.includes('<meta property="og:url" content="https://docs.example.test/docs/ARCBOS-AGR-2606-0008/">'),
+    "canonical social URL metadata must use the configured domain and canonical path"
+  );
+  assert.ok(html.includes('<meta property="og:type" content="article">'), "Open Graph type must remain present");
+  assert.ok(html.includes('<meta property="og:title" content="Test Agreement">'), "Open Graph title must remain present");
+  assert.ok(
+    html.includes('<meta property="og:image" content="https://docs.example.test/assets/arcbos-share-preview.png">'),
+    "social preview image metadata must remain present"
+  );
+  assert.ok(html.includes('<meta name="twitter:card" content="summary_large_image">'), "Twitter card metadata must remain present");
+  assert.ok(html.includes('<main class="document">'), "document page structure must keep the main document root");
+  assert.ok(html.includes('<header class="document-masthead">'), "document masthead must remain present");
+  assert.ok(html.includes('<section class="document-title-block">'), "document title block must remain present");
+  assert.ok(html.includes('<h1>Test Agreement</h1>'), "document h1 must remain present");
+  assert.ok(html.includes('<div class="document-meta-grid"'), "metadata grid must remain present");
+  assert.ok(html.includes('<section class="document-content">'), "document content section must remain present");
 });
 
 // ── 10. preview-publish.yml installs Typst ───────────────────────────────────
