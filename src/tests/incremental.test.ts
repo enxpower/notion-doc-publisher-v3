@@ -401,6 +401,8 @@ test("incremental content publish workflow is manual, guarded, and route-bounded
   assert.ok(workflow.includes("PUBLISHER_STATE_TOKEN"));
   assert.ok(workflow.includes("PHASE2_STATE_PATH: state/incremental-state.json"));
   assert.ok(workflow.includes('"GONG":"targets/pub"'));
+  assert.ok(!workflow.includes("lifecycle_writeback"));
+  assert.ok(workflow.includes('INCREMENTAL_LIFECYCLE_WRITEBACK: "false"'));
   assert.ok(workflow.includes("npm run publish:incremental:dry-run"));
   assert.ok(workflow.includes("npm run publish:incremental"));
   assert.ok(!operationalWorkflow.includes("npm run assign-id"));

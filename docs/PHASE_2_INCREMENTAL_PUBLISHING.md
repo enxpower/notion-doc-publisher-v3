@@ -186,6 +186,14 @@ using repository secrets/variables and committed route config. It does not run
 It is intended as the fast planning primitive for the later governed content
 publish workflow.
 
+The GitHub Actions workflow `Incremental Content Publish` is also manual-only.
+Its first governed implementation can generate and apply routed incremental
+filesystem changes to checked-out target repositories, but it explicitly keeps
+`INCREMENTAL_LIFECYCLE_WRITEBACK` disabled in workflow execution. Production
+Notion lifecycle writeback requires a later verified post-deployment step so a
+successful lifecycle result cannot be written before target repository commits,
+Pages deployment, and live route checks have passed.
+
 ## Failure Safety
 
 If a publish/update/move fails and previous successful state exists, previous
@@ -227,8 +235,8 @@ route configuration including AGIM and GONG, path-prefixed URL support, GONG
 favicon/share assets, route-aware HTML metadata, manifest-owned deletion guards,
 and automated regression coverage.
 
-Production lifecycle execution and live Phase 2 sealing still require the
-approved content deployment workflow to be completed, merged, and run with
-GitHub/Notion production credentials. Phase 2 must not be declared sealed until
-AGIM and GONG are live and CREATE, UPDATE, MOVE, REMOVE, REPUBLISH, NOOP, and
-INVALID preservation are verified in production.
+Production lifecycle writeback, deployment credential provisioning, private
+state storage, and live Phase 2 sealing still require governed production
+configuration and execution. Phase 2 must not be declared sealed until AGIM and
+GONG are live and CREATE, UPDATE, MOVE, REMOVE, REPUBLISH, NOOP, and INVALID
+preservation are verified in production.

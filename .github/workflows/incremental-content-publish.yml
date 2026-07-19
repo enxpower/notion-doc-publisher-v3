@@ -15,11 +15,6 @@ on:
         description: "Type PHASE2-INCREMENTAL-PUBLISH to permit apply mode"
         required: false
         default: ""
-      lifecycle_writeback:
-        description: "Write Notion lifecycle results; use only after deployment verification"
-        type: boolean
-        required: true
-        default: false
 
 permissions:
   contents: read
@@ -124,7 +119,7 @@ jobs:
       - name: Apply incremental output locally
         if: ${{ inputs.mode == 'apply' }}
         env:
-          INCREMENTAL_LIFECYCLE_WRITEBACK: ${{ inputs.lifecycle_writeback && 'true' || 'false' }}
+          INCREMENTAL_LIFECYCLE_WRITEBACK: "false"
         run: npm run publish:incremental
 
       - name: Commit private state
