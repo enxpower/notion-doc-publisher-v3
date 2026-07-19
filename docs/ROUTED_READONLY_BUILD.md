@@ -34,11 +34,17 @@ dist/routes-readonly/_audit/read-only-audit.json
 dist/routes-readonly/routed-build-summary.json
 ```
 
+Each command run resets only its selected local readonly staging root before
+building so stale fixture or previous-run files cannot enter a release artifact.
+
 For mocked local verification without Notion:
 
 ```bash
 ROUTED_READONLY_TEST_MODE=fixture npm run build:routed:readonly
 ```
+
+Fixture mode writes to `dist/routes-readonly-fixture` so mandatory local safety
+checks cannot leave stale fixture files in the production readonly staging root.
 
 ## Architecture
 

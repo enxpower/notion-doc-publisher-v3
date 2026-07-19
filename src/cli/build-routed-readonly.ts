@@ -1,3 +1,4 @@
+import fs from "node:fs/promises";
 import path from "node:path";
 import { runCli } from "../config.js";
 import { loadDocuments } from "./shared.js";
@@ -7,11 +8,13 @@ import { createFixtureRoutedPdfRenderer } from "../routing/routed-pdf.js";
 import { loadBrandRoutes, routesWithOutputBase } from "../routing/routes.js";
 
 await runCli(async () => {
-  const outputBaseRoot = path.resolve(path.join("dist", "routes-readonly"));
   const testMode = process.env.ROUTED_READONLY_TEST_MODE === "fixture";
+  const outputBaseRoot = path.resolve(path.join("dist", testMode ? "routes-readonly-fixture" : "routes-readonly"));
   const baseRoutes = await loadBrandRoutes();
   const routes = routesWithOutputBase(baseRoutes, outputBaseRoot);
   const config = testMode ? await loadRoutedDryRunConfig() : await loadRoutedReadonlyConfigFromEnvironment(baseRoutes);
+
+  await resetReadonlyOutputRoot(outputBaseRoot);
 
   const result = await buildRoutedReadonly({
     config,
@@ -35,3 +38,12 @@ await runCli(async () => {
   console.log(`Summary: ${path.join(outputBaseRoot, "routed-build-summary.json")}`);
   console.log(`Private audit report: ${result.auditReportPath}`);
 });
+
+async function resetReadonlyOutputRoot(outputBaseRoot: string): Promise<void> {
+  const distRoot = path.resolve("dist");
+  const relative = path.relative(distRoot, outputBaseRoot);
+  if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) {
+    throw new Error("Readonly routed output root must be inside dist.");
+  }
+  await fs.rm(outputBaseRoot, { recursive: true, force: true });
+}

@@ -48,6 +48,8 @@ test("routed readonly command is separate and existing build commands remain unc
   assert.equal(pkg.scripts["build:routed:readonly"], "tsc && node .tmp/cli/build-routed-readonly.js");
   assert.ok(cliSource.includes("loadDocuments"), "readonly CLI must use the existing Notion document load path outside test mode");
   assert.ok(cliSource.includes("loadRoutedReadonlyConfigFromEnvironment"), "readonly CLI must use the restricted readonly config loader");
+  assert.ok(cliSource.includes("routes-readonly-fixture"), "fixture mode must not write to the production readonly staging root");
+  assert.ok(cliSource.includes("resetReadonlyOutputRoot(outputBaseRoot)"), "readonly CLI must reset its selected local staging root before build");
   assert.ok(!cliSource.includes("loadConfigOrThrow"), "readonly CLI must not use the general environment loader");
   assert.ok(!cliSource.includes("autoFillDocuments"), "readonly CLI must not call autofill");
   assert.ok(!cliSource.includes("createAssignmentPlan"), "readonly CLI must not assign DOC_IDs");

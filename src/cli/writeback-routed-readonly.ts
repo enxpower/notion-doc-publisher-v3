@@ -22,7 +22,7 @@ async function main(): Promise<void> {
   const mode = parseMode(process.argv.slice(2));
   const testMode = process.env.ROUTED_WRITEBACK_TEST_MODE === "fixture";
   const routes = await loadBrandRoutes();
-  const outputBaseRoot = path.resolve("dist", "routes-readonly");
+  const outputBaseRoot = path.resolve("dist", testMode ? "routes-readonly-fixture" : "routes-readonly");
   const writebackOutputRoot = path.resolve("dist", "routed-url-writeback");
   const runId = createRunId();
   const now = new Date().toISOString();

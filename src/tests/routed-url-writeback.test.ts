@@ -37,6 +37,7 @@ test("routed writeback commands are separate and legacy build/writeback commands
   assert.equal(pkg.scripts["ci:writeback"], "tsc && node .tmp/cli/writeback-preview.js");
   assert.equal(pkg.scripts["writeback:routed:dry-run"], "tsc && node .tmp/cli/writeback-routed-readonly.js --dry-run");
   assert.equal(pkg.scripts["writeback:routed"], "tsc && node .tmp/cli/writeback-routed-readonly.js --write");
+  assert.ok(cliSource.includes("routes-readonly-fixture"), "writeback fixture mode must not share the production readonly staging root");
   assert.ok(cliSource.includes("updatePublishedUrlOnly"));
   assert.ok(!cliSource.includes("updateDocumentSuccess"));
   assert.ok(!cliSource.includes("updateDocumentFailed"));
