@@ -12,6 +12,7 @@ export type AppConfig = {
   notionToken: string;
   notionDatabaseId: string;
   targetSiteDomain?: string;
+  pdfPath?: string;
   docIdYearMonth: string;
   allowedVisibility: Set<string>;
   publishableStatuses: Set<string>;

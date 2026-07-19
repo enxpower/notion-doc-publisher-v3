@@ -2,7 +2,7 @@ import { UserFacingError, type AppConfig } from "../config.js";
 import { NotionClient, type NotionDatabase } from "./client.js";
 import { assertNotionMutationAllowed } from "./read-only-guard.js";
 
-export type BuildStatus = "pending" | "success" | "failed" | "skipped";
+export type BuildStatus = "pending" | "success" | "failed" | "skipped" | "unpublished";
 
 const REQUIRED_WRITEBACK_FIELDS: Record<string, string> = {
   PUBLISHED_URL: "url",
@@ -45,6 +45,26 @@ export class NotionWriteback {
     await this.client.updatePageProperties(pageId, {
       PUBLISHED_URL: { url }
     }, "updatePublishedUrlOnly");
+  }
+
+  async updateLifecycleResult(update: {
+    pageId: string;
+    status: BuildStatus;
+    message: string;
+    publishedUrl?: string;
+    runId?: string;
+  }): Promise<void> {
+    assertNotionMutationAllowed("updateLifecycleResult");
+    const properties: Record<string, unknown> = {
+      BUILD_STATUS: { select: { name: update.status } },
+      BUILD_MESSAGE: richText(update.message),
+      LAST_BUILD_RUN: richText(update.runId ?? "incremental-content-publish")
+    };
+    if (update.publishedUrl !== undefined) {
+      properties.PUBLISHED_URL = { url: update.publishedUrl };
+      properties.PUBLISHED_AT = { date: { start: new Date().toISOString() } };
+    }
+    await this.client.updatePageProperties(update.pageId, properties, "updateLifecycleResult");
   }
 
   async readPublishedUrl(pageId: string): Promise<string> {

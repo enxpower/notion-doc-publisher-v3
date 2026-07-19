@@ -394,7 +394,7 @@ function validateEligibleOutput(
   if (!isSafeFinalUrl(targetUrl, manifest.targetBaseUrl)) {
     return "INVALID_TARGET_URL";
   }
-  if (targetUrl !== `${manifest.targetBaseUrl.replace(/\/+$/, "")}${document.meta.canonicalPath}`) {
+  if (targetUrl !== `${manifest.targetBaseUrl.replace(/\/+$/, "")}${normalizedManifestPathPrefix(manifest)}${document.meta.canonicalPath}`) {
     return "INVALID_TARGET_URL_MISMATCH";
   }
   const successfulPdf = manifest.pdfResults.some((pdf) => pdf.docId === document.meta.docId && pdf.status === "success");
@@ -433,6 +433,14 @@ function canonicalPathToHtmlPath(canonicalPath: string): string | undefined {
     return undefined;
   }
   return path.posix.join(relative, "index.html");
+}
+
+function normalizedManifestPathPrefix(manifest: Pick<RoutedBrandManifest, "pathPrefix">): string {
+  const raw = manifest.pathPrefix?.trim() ?? "";
+  if (!raw || raw === "/") {
+    return "";
+  }
+  return `/${raw.replace(/^\/+|\/+$/g, "")}`;
 }
 
 function isSafeFinalUrl(value: string, expectedBaseUrl: string): boolean {

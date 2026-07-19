@@ -7,6 +7,10 @@ type RawRoute = {
   brand?: unknown;
   targetRepository?: unknown;
   targetDomain?: unknown;
+  pathPrefix?: unknown;
+  deploymentRoot?: unknown;
+  deploymentMode?: unknown;
+  pdfPath?: unknown;
   cname?: unknown;
   routeId?: unknown;
   presentationProfileKey?: unknown;
@@ -40,7 +44,7 @@ export function defaultRouteOutputRoot(brand: string): string {
 export function routeWithOutputRoot(route: BrandRoute, outputBaseRoot: string): BrandRoute {
   return {
     ...route,
-    outputRoot: path.join(outputBaseRoot, normalizeBrand(route.brand), "site")
+    outputRoot: path.join(outputBaseRoot, normalizeBrand(route.brand), "site", route.deploymentRoot ?? "")
   };
 }
 
@@ -58,6 +62,10 @@ function parseRoute(brand: string, raw: RawRoute | undefined): BrandRoute {
   }
   const targetRepository = nullableStringField(raw.targetRepository, `${brand}.targetRepository`);
   const targetDomain = parseTargetDomain(stringField(raw.targetDomain, `${brand}.targetDomain`), `${brand}.targetDomain`);
+  const pathPrefix = optionalPathPrefix(raw.pathPrefix, `${brand}.pathPrefix`);
+  const deploymentRoot = optionalRelativeRoot(raw.deploymentRoot, `${brand}.deploymentRoot`);
+  const deploymentMode = deploymentModeField(raw.deploymentMode, `${brand}.deploymentMode`);
+  const pdfPath = optionalRelativeRoot(raw.pdfPath, `${brand}.pdfPath`) || "pdf";
   const allowedUrlNamespaces = stringArrayField(raw.allowedUrlNamespaces, `${brand}.allowedUrlNamespaces`);
   if (allowedUrlNamespaces.length === 0) {
     throw new UserFacingError(`${brand}.allowedUrlNamespaces must not be empty.`);
@@ -77,6 +85,10 @@ function parseRoute(brand: string, raw: RawRoute | undefined): BrandRoute {
     outputRoot: defaultRouteOutputRoot(brand),
     targetRepository,
     targetDomain,
+    pathPrefix,
+    deploymentRoot,
+    deploymentMode,
+    pdfPath,
     cname,
     presentationProfileKey: presentationProfileKeyField(raw.presentationProfileKey, `${brand}.presentationProfileKey`, brand),
     allowedUrlNamespaces,
@@ -125,9 +137,6 @@ function presentationProfileKeyField(value: unknown, name: string, brand: string
   if (profileKey === null && brand !== "GONG") {
     throw new UserFacingError(`Brand route field ${name} must be a non-empty string.`);
   }
-  if (brand === "GONG" && profileKey !== null) {
-    throw new UserFacingError("GONG presentation profile is unconfirmed and must remain null.");
-  }
   return profileKey;
 }
 
@@ -149,4 +158,60 @@ function parseTargetDomain(value: string, name: string): string {
   } catch {
     throw new UserFacingError(`Brand route field ${name} must be an https origin URL.`);
   }
+}
+
+function optionalPathPrefix(value: unknown, name: string): string {
+  if (value === undefined || value === null) {
+    return "";
+  }
+  if (typeof value !== "string") {
+    throw new UserFacingError(`Brand route field ${name} must be a string.`);
+  }
+  const raw = value.trim();
+  if (!raw || raw === "/") {
+    return "";
+  }
+  const normalized = `/${raw.replace(/^\/+|\/+$/g, "")}`;
+  if (!isSafeRelativePath(normalized.slice(1))) {
+    throw new UserFacingError(`Brand route field ${name} must be a safe absolute path prefix.`);
+  }
+  return normalized;
+}
+
+function optionalRelativeRoot(value: unknown, name: string): string {
+  if (value === undefined || value === null) {
+    return "";
+  }
+  if (typeof value !== "string") {
+    throw new UserFacingError(`Brand route field ${name} must be a string.`);
+  }
+  const raw = value.trim();
+  if (!raw || raw === "." || raw === "/") {
+    return "";
+  }
+  const normalized = raw.replace(/^\/+|\/+$/g, "");
+  if (!isSafeRelativePath(normalized)) {
+    throw new UserFacingError(`Brand route field ${name} must be a safe relative path.`);
+  }
+  return normalized;
+}
+
+function deploymentModeField(value: unknown, name: string): BrandRoute["deploymentMode"] {
+  if (value === undefined || value === null || value === "") {
+    return "branch";
+  }
+  if (value !== "branch" && value !== "github-pages-artifact") {
+    throw new UserFacingError(`Brand route field ${name} must be branch or github-pages-artifact.`);
+  }
+  return value;
+}
+
+function isSafeRelativePath(value: string): boolean {
+  if (!value) {
+    return true;
+  }
+  if (path.posix.isAbsolute(value) || value.includes("//")) {
+    return false;
+  }
+  return value.split("/").every((segment) => Boolean(segment) && segment !== "." && segment !== ".." && !/[\\\0]/.test(segment));
 }

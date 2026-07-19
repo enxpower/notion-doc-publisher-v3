@@ -27,7 +27,7 @@ Default output:
 dist/routes-readonly/ARCBOS/site
 dist/routes-readonly/ENERGIZE/site
 dist/routes-readonly/AGIM/site
-dist/routes-readonly/GONG/site
+dist/routes-readonly/GONG/site/gong-docs
 dist/routes-readonly/{BRAND}/site/pdf/{DOC_ID}.pdf
 dist/routes-readonly/{BRAND}/manifest.json
 dist/routes-readonly/_audit/read-only-audit.json
@@ -63,6 +63,15 @@ NOTION_DATABASE_ID single database
 
 Brand routing happens after documents are loaded from `NOTION_DATABASE_ID`.
 There are no per-brand database IDs.
+
+The configured Phase 2 production routes are:
+
+| Brand | Origin | Path Prefix | Publisher Boundary |
+|---|---:|---:|---|
+| ARCBOS | `https://docs.arcbos.com` | none | `notion-doc-publisher-v3` workflow Pages artifact |
+| ENERGIZE | `https://docs.energizeos.com` | none | repository root |
+| AGIM | `https://docs.agim.ca` | none | repository root, preserving `vi/` and existing portal content |
+| GONG | `https://enxpower.com` | `/gong-docs` | `gong-docs/**` only |
 
 ## Readonly Safety
 
@@ -124,6 +133,12 @@ compiled PDFs are copied into each brand site root:
 dist/routes-readonly/{BRAND}/site/pdf/{DOC_ID}.pdf
 ```
 
+For GONG, the equivalent deployable path is:
+
+```text
+dist/routes-readonly/GONG/site/gong-docs/pdf/{DOC_ID}.pdf
+```
+
 Each generated PDF is checked before it is marked successful:
 
 - file exists
@@ -162,7 +177,7 @@ A record is eligible only when it is accepted in the routed build, belongs to a
 confirmed deployment-valid route, has a valid routed canonical URL, generated
 HTML, successful routed PDF output, and same-brand HTML-to-PDF link integrity.
 Rejected, draft, filtered, collision-affected, failed-PDF, missing-HTML,
-unknown-brand, and unconfirmed-route records are skipped.
+unknown-brand, and deployment-invalid-route records are skipped.
 
 The public writeback plan contains only counts, sanitized aliases, safe reason
 codes, idempotency status, and URL fingerprints. The private backup contains the

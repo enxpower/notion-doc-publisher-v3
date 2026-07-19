@@ -6,6 +6,7 @@ import { DOC_ID_PATTERN, parseDocId } from "../doc-id/generator.js";
 import { renderDocumentHtml, renderDocsRootHtml, renderIndexHtml, renderNamespaceRootHtml } from "../render/render-html.js";
 import { isPublicIndexListed, isPublishableCandidate, validateDocuments } from "../validate/validate.js";
 import {
+  computeRouteBaseUrl,
   computeRouteFinalUrl,
   createDryRunDeploymentPlan,
   createRoutedPublishingPlan,
@@ -59,6 +60,8 @@ export type RoutedBrandManifest = {
   targetRepository: string | null;
   targetBaseUrl: string;
   targetDomain: string;
+  pathPrefix: string;
+  deploymentRoot: string;
   cname?: string;
   presentationProfileKey?: string | null;
   allowedUrlNamespaces: string[];
@@ -178,7 +181,8 @@ export async function buildRoutedSites(input: {
     if (plan.ok && routeErrors.length === 0 && documentsForOutput.length > 0) {
       const routeConfig = {
         ...input.config,
-        targetSiteDomain: route.targetDomain
+        targetSiteDomain: computeRouteBaseUrl(route),
+        pdfPath: route.pdfPath ?? "pdf"
       };
       trackedFiles.push(...await copyRouteStaticAssets(route.outputRoot, route, input.config));
 
@@ -210,7 +214,7 @@ export async function buildRoutedSites(input: {
           canonicalPath: document.meta.canonicalPath,
           finalUrl: computeRouteFinalUrl(route, document.meta.canonicalPath),
           htmlPath,
-          pdfPath: document.meta.docId ? `pdf/${document.meta.docId}.pdf` : undefined
+          pdfPath: document.meta.docId ? `${route.pdfPath ?? "pdf"}/${document.meta.docId}.pdf` : undefined
         });
       }
 
@@ -249,6 +253,8 @@ export async function buildRoutedSites(input: {
       outputRoot: route.outputRoot,
       targetRepository: route.targetRepository,
       targetDomain: route.targetDomain,
+      pathPrefix: route.pathPrefix ?? "",
+      deploymentRoot: route.deploymentRoot ?? "",
       files: uniqueFiles,
       deletions,
       existingFileCount: previous.length
@@ -268,7 +274,7 @@ export async function buildRoutedSites(input: {
     const buildStatus: RoutedBuildStatus = routeErrors.length > 0
       ? successfullyBuiltDocumentCount > 0 ? "failed" : "blocked"
       : uniqueFiles.length > 0 ? "success" : "blocked";
-    const publicOutputRoot = path.posix.join(brand, "site");
+    const publicOutputRoot = publicRouteOutputRoot(brand, route);
     const successfulPdfResults = pdfResults.filter((result) => result.status === "success");
     const failedPdfResults = pdfResults.filter((result) => result.status === "failed");
     const plannedPdfCount = documentPlans.filter((document) => document.pdfPath).length;
@@ -298,6 +304,8 @@ export async function buildRoutedSites(input: {
       targetRepository: route.targetRepository,
       targetBaseUrl: route.targetDomain,
       targetDomain: route.targetDomain,
+      pathPrefix: route.pathPrefix ?? "",
+      deploymentRoot: route.deploymentRoot ?? "",
       cname: route.cname,
       presentationProfileKey: route.presentationProfileKey,
       allowedUrlNamespaces: route.allowedUrlNamespaces ?? [],
@@ -644,7 +652,7 @@ function validateRenderedHtml(
   if (!html.includes("window.print()")) {
     issues.push({ code: "HTML_PRINT_ACTION_MISSING", message: "Rendered HTML is missing window.print().", docId: document.meta.docId });
   }
-  if (document.meta.docId && !html.includes(`href="../../pdf/${document.meta.docId}.pdf"`)) {
+    if (document.meta.docId && !html.includes(`href="../../${currentRoute.pdfPath ?? "pdf"}/${document.meta.docId}.pdf"`)) {
     issues.push({ code: "HTML_PDF_LINK_MISSING", message: "Rendered HTML is missing the expected relative PDF link.", docId: document.meta.docId });
   }
   for (const route of routes) {
@@ -826,6 +834,10 @@ function publicDeploymentPlan(plan: DryRunDeploymentPlan, sourceDir: string, red
     errors: plan.errors.map(sanitizeMessage),
     wouldDelete: redactPrivatePaths ? redactPrivateFileList(plan.wouldDelete) : [...plan.wouldDelete]
   };
+}
+
+function publicRouteOutputRoot(brand: string, route: BrandRoute): string {
+  return path.posix.join(brand, "site", route.deploymentRoot ?? "");
 }
 
 function safeDocId(value: string | undefined): string | undefined {

@@ -53,7 +53,7 @@ export async function renderDocumentHtml(document: DocumentModel, config: AppCon
     sloganBlock,
     topbar: renderTopbar(brand.displayName, ROOT_RELATIVE_FROM_DOC, !isPrivateLink),
     metaGrid: renderMetaGrid(meta.docId, meta.documentType.label, meta.version, meta.status, classification, meta.client.label, meta.project.label, updated),
-    actions: renderActions(meta.docId, ROOT_RELATIVE_FROM_DOC),
+    actions: renderActions(meta.docId, ROOT_RELATIVE_FROM_DOC, config.pdfPath),
     toc: renderToc(toc),
     body,
     footer: renderFooter(brand.displayName, meta.docId, meta.version),
@@ -350,16 +350,17 @@ function renderMetaGrid(
 /**
  * Compact, secondary print/download actions.
  * Print opens the browser's native print dialog.
- * Download PDF links to the pre-generated site PDF at {rootRelative}pdf/{DOC_ID}.pdf.
+ * Download PDF links to the pre-generated site PDF at {rootRelative}{pdfPath}/{DOC_ID}.pdf.
  * Uses a relative path (rootRelative) so the link works correctly on both
  * root deployments (docs.arcbos.com) and sub-path deployments
  * (e.g. enxpower.github.io/publisher-energize/).
  * Exported for unit testing.
  */
-export function renderActions(docId?: string | null, rootRelative = "../../"): string {
+export function renderActions(docId?: string | null, rootRelative = "../../", pdfPath = "pdf"): string {
   const printBtn = `<button type="button" class="action-btn" onclick="window.print()" title="Print this document using your browser" aria-label="Print this document">Print</button>`;
   if (!docId) return printBtn;
-  const pdfBtn = `<a href="${rootRelative}pdf/${escapeHtml(docId)}.pdf" class="action-btn action-btn--download-pdf" title="Download pre-generated PDF" aria-label="Download PDF" download>Download PDF</a>`;
+  const safePdfPath = pdfPath.replace(/^\/+|\/+$/g, "") || "pdf";
+  const pdfBtn = `<a href="${rootRelative}${escapeHtml(safePdfPath)}/${escapeHtml(docId)}.pdf" class="action-btn action-btn--download-pdf" title="Download pre-generated PDF" aria-label="Download PDF" download>Download PDF</a>`;
   return `${printBtn}${pdfBtn}`;
 }
 

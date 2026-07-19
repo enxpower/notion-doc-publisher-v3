@@ -259,6 +259,36 @@ test("rendered document HTML references the ENERGIZE favicon for ENERGIZE pages"
   assert.ok(!html.includes("arcbos-share-preview.png"));
 });
 
+test("rendered document HTML references the GONG favicon and prefixed social image", async () => {
+  const html = await renderDocumentHtml(
+    makeDoc({
+      docId: "GONG-MEM-2607-0001",
+      brand: { label: "GONG", token: "GONG", slug: "gong" },
+      visibility: "Internal",
+      shareToken: "gongclienttoken",
+      privateLinkNamespace: "internal",
+      canonicalPath: "/internal/gongclienttoken/"
+    }),
+    makeConfig({
+      targetSiteDomain: "https://enxpower.com/gong-docs",
+      brandTokens: { ARCBOS: "ARCBOS", GONG: "GONG" },
+      brandProfiles: {
+        GONG: {
+          displayName: "GONG",
+          tagline: "",
+          shareImage: "gong-share-preview.png",
+          favicon: "gong-favicon.svg"
+        }
+      }
+    })
+  );
+
+  assert.ok(html.includes('<link rel="icon" type="image/svg+xml" href="../../assets/gong-favicon.svg">'));
+  assert.ok(html.includes('<meta property="og:image" content="https://enxpower.com/gong-docs/assets/gong-share-preview.png">'));
+  assert.ok(!html.includes("docs.arcbos.com"));
+  assert.ok(!html.includes("GONG-MEM-2607-0001/internal"));
+});
+
 // ── 10. preview-publish.yml installs Typst ───────────────────────────────────
 
 test("preview-publish.yml installs Typst via typst-community/setup-typst", async () => {

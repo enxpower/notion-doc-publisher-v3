@@ -29,18 +29,22 @@ test("brand route config contains exactly the four normalized dry-run brands", a
   const brands = routes.map((route) => route.brand).sort();
 
   assert.deepEqual(brands, ["AGIM", "ARCBOS", "ENERGIZE", "GONG"]);
-  assert.equal(routes.find((route) => route.brand === "ARCBOS")!.targetRepository, "enxpower/docs-arcbos-v2");
+  assert.equal(routes.find((route) => route.brand === "ARCBOS")!.targetRepository, "enxpower/notion-doc-publisher-v3");
   assert.equal(routes.find((route) => route.brand === "ARCBOS")!.targetDomain, "https://docs.arcbos.com");
+  assert.equal(routes.find((route) => route.brand === "ARCBOS")!.deploymentMode, "github-pages-artifact");
   assert.equal(routes.find((route) => route.brand === "ENERGIZE")!.targetRepository, "enxpower/docs-energize-v2");
   assert.equal(routes.find((route) => route.brand === "ENERGIZE")!.targetDomain, "https://docs.energizeos.com");
+  assert.equal(routes.find((route) => route.brand === "ENERGIZE")!.deploymentMode, "branch");
   assert.equal(routes.find((route) => route.brand === "AGIM")!.targetRepository, "enxpower/agim-docs");
   assert.equal(routes.find((route) => route.brand === "AGIM")!.targetDomain, "https://docs.agim.ca");
-  assert.equal(routes.find((route) => route.brand === "GONG")!.targetRepository, null);
+  assert.equal(routes.find((route) => route.brand === "GONG")!.targetRepository, "enxpower/pub");
   assert.equal(routes.find((route) => route.brand === "GONG")!.targetDomain, "https://enxpower.com");
-  assert.equal(routes.find((route) => route.brand === "GONG")!.repositoryConfirmed, false);
-  assert.equal(routes.find((route) => route.brand === "GONG")!.presentationProfileKey, null);
+  assert.equal(routes.find((route) => route.brand === "GONG")!.pathPrefix, "/gong-docs");
+  assert.equal(routes.find((route) => route.brand === "GONG")!.deploymentRoot, "gong-docs");
+  assert.equal(routes.find((route) => route.brand === "GONG")!.repositoryConfirmed, true);
+  assert.equal(routes.find((route) => route.brand === "GONG")!.presentationProfileKey, "GONG");
   const brandProfiles = JSON.parse(await fs.readFile(path.resolve("config/brands.json"), "utf8")) as Record<string, unknown>;
-  assert.equal("GONG" in brandProfiles, false);
+  assert.equal("GONG" in brandProfiles, true);
 });
 
 test("brand route config rejects duplicate route identifiers", async () => {
@@ -53,7 +57,7 @@ test("brand route config rejects duplicate route identifiers", async () => {
 
 test("brand route config rejects duplicate repository/domain combinations", async () => {
   const configPath = await tempRouteConfig((config) => {
-    config.ENERGIZE.targetRepository = "enxpower/docs-arcbos-v2";
+    config.ENERGIZE.targetRepository = "enxpower/notion-doc-publisher-v3";
     config.ENERGIZE.targetDomain = "https://docs.arcbos.com";
     config.ENERGIZE.cname = "docs.arcbos.com";
   });
@@ -69,12 +73,12 @@ test("brand route config rejects unsupported namespaces", async () => {
   await assert.rejects(() => loadBrandRoutes(configPath), /unsupported namespace: admin/);
 });
 
-test("GONG route rejects automatic use of an unconfirmed presentation profile", async () => {
+test("GONG route accepts only safe deployment roots and path prefixes", async () => {
   const configPath = await tempRouteConfig((config) => {
-    config.GONG.presentationProfileKey = "GONG";
+    config.GONG.deploymentRoot = "../gong-docs";
   });
 
-  await assert.rejects(() => loadBrandRoutes(configPath), /GONG presentation profile is unconfirmed/);
+  await assert.rejects(() => loadBrandRoutes(configPath), /safe relative path/);
 });
 
 test("routed dry-run builds all four brands into separate temporary roots", async () => {
@@ -86,17 +90,14 @@ test("routed dry-run builds all four brands into separate temporary roots", asyn
     assert.equal(manifest.sourceDocumentCount, 1, manifest.brand);
     assert.equal(manifest.successfullyBuiltDocumentCount, 1, manifest.brand);
     assert.equal(manifest.buildStatus, "success", manifest.brand);
-    assert.equal(manifest.outputRoot, `${manifest.brand}/site`);
-    assert.equal(manifest.deploymentPlan.sourceDir, `${manifest.brand}/site`);
+    const expectedOutputRoot = manifest.brand === "GONG" ? "GONG/site/gong-docs" : `${manifest.brand}/site`;
+    assert.equal(manifest.outputRoot, expectedOutputRoot);
+    assert.equal(manifest.deploymentPlan.sourceDir, expectedOutputRoot);
     assert.ok(await exists(path.join(outputBaseRoot, manifest.outputRoot, "index.html")), `${manifest.brand} index missing`);
     assert.ok(await exists(path.join(outputBaseRoot, manifest.brand, "manifest.json")), `${manifest.brand} manifest missing`);
   }
 
-  assert.equal(result.manifests.find((manifest) => manifest.brand === "GONG")!.deploymentPlan.ok, false);
-  assert.ok(
-    result.manifests.find((manifest) => manifest.brand === "GONG")!.deploymentPlan.errors.some((error) => error.includes("No confirmed GONG target repository"))
-  );
-  assert.equal(result.manifests.filter((manifest) => manifest.brand !== "GONG").every((manifest) => manifest.deploymentPlan.ok), true);
+  assert.equal(result.manifests.every((manifest) => manifest.deploymentPlan.ok), true);
 });
 
 test("duplicate normalized route brands cannot overwrite another brand manifest", async () => {
@@ -230,8 +231,9 @@ test("routed manifests match generated output and expose only public-safe paths"
     assert.ok(!manifestRaw.includes("@"));
     assert.equal(manifest.schema, "notion-doc-publisher-v3/routed-brand-manifest");
     assert.equal(manifest.version, 1);
-    assert.equal(manifest.outputRoot, `${manifest.brand}/site`);
-    assert.equal(manifest.deploymentPlan.sourceDir, `${manifest.brand}/site`);
+    const expectedOutputRoot = manifest.brand === "GONG" ? "GONG/site/gong-docs" : `${manifest.brand}/site`;
+    assert.equal(manifest.outputRoot, expectedOutputRoot);
+    assert.equal(manifest.deploymentPlan.sourceDir, expectedOutputRoot);
     assert.equal(manifest.files.length > 0, true, manifest.brand);
     const actualOutputRoot = path.join(outputBaseRoot, manifest.outputRoot);
     for (const file of manifest.files) {
@@ -240,7 +242,7 @@ test("routed manifests match generated output and expose only public-safe paths"
     for (const document of manifest.documents) {
       assert.ok(manifest.canonicalPaths.includes(document.canonicalPath));
       assert.ok(manifest.pdfPaths.includes(`pdf/${document.docId}.pdf`));
-      assert.equal(document.finalUrl, `${manifest.targetBaseUrl}${document.canonicalPath}`);
+      assert.equal(document.finalUrl, `${manifest.targetBaseUrl}${manifest.pathPrefix ?? ""}${document.canonicalPath}`);
     }
   }
 });
@@ -253,7 +255,8 @@ test("routed summary exposes relative manifest and output paths", async () => {
   assert.ok(!summaryRaw.includes(os.homedir()));
   assert.equal(result.summary.outputBaseRoot, ".");
   for (const brand of result.summary.brands) {
-    assert.equal(brand.outputRoot, `${brand.brand}/site`);
+    const expectedOutputRoot = brand.brand === "GONG" ? "GONG/site/gong-docs" : `${brand.brand}/site`;
+    assert.equal(brand.outputRoot, expectedOutputRoot);
     assert.equal(brand.manifestPath, `${brand.brand}/manifest.json`);
   }
 });
@@ -349,6 +352,10 @@ test("routed output content is isolated per brand", async () => {
     assert.ok(html.includes("window.print()"), manifest.brand);
     assert.ok(html.includes("Download PDF"), manifest.brand);
     assert.ok(html.includes(`href="../../pdf/${document.docId}.pdf"`), manifest.brand);
+    if (manifest.brand === "GONG") {
+      assert.ok(html.includes('<link rel="icon" type="image/svg+xml" href="../../assets/gong-favicon.svg">'));
+      assert.ok(html.includes('content="https://enxpower.com/gong-docs/assets/gong-share-preview.png"'));
+    }
     if (document.canonicalPath.startsWith("/docs/")) {
       assert.ok(html.includes(`content="${manifest.targetBaseUrl}${document.canonicalPath}"`), manifest.brand);
     } else {
@@ -394,6 +401,11 @@ test("routed output content is isolated per brand", async () => {
   assert.ok(arcbosFiles.includes("assets/arcbos-share-preview.png"));
   assert.ok(!arcbosFiles.includes("assets/energizeos-share-preview.png"));
   assert.ok(!arcbosFiles.includes("assets/agim-share-preview.png"));
+  const gongFiles = await listFiles(path.join(outputBaseRoot, "GONG", "site", "gong-docs"));
+  assert.ok(gongFiles.includes("assets/gong-favicon.svg"));
+  assert.ok(gongFiles.includes("assets/gong-share-preview.png"));
+  assert.ok(!gongFiles.includes("assets/arcbos-share-preview.png"));
+  assert.ok(!gongFiles.includes("assets/energizeos-share-preview.png"));
 });
 
 test("existing npm run build command is unchanged and legacy build uses brand-aware canonical metadata", async () => {
@@ -439,31 +451,26 @@ async function tempRoot(): Promise<string> {
   return await fs.mkdtemp(path.join(os.tmpdir(), "notion-routed-build-"));
 }
 
+type MutableRouteFixture = {
+  brand: string;
+  targetRepository: string | null;
+  targetDomain: string;
+  pathPrefix?: string;
+  deploymentRoot?: string;
+  pdfPath?: string;
+  cname: string;
+  routeId: string;
+  presentationProfileKey: string | null;
+  allowedUrlNamespaces: string[];
+  repositoryConfirmed: boolean;
+  blockedReason?: string;
+};
+
 async function tempRouteConfig(
-  mutate: (config: Record<string, {
-    brand: string;
-    targetRepository: string | null;
-    targetDomain: string;
-    cname: string;
-    routeId: string;
-    presentationProfileKey: string | null;
-    allowedUrlNamespaces: string[];
-    repositoryConfirmed: boolean;
-    blockedReason?: string;
-  }>) => void
+  mutate: (config: Record<string, MutableRouteFixture>) => void
 ): Promise<string> {
   const raw = await fs.readFile(path.resolve("config/brand-routes.json"), "utf8");
-  const parsed = JSON.parse(raw) as Record<string, {
-    brand: string;
-    targetRepository: string | null;
-    targetDomain: string;
-    cname: string;
-    routeId: string;
-    presentationProfileKey: string | null;
-    allowedUrlNamespaces: string[];
-    repositoryConfirmed: boolean;
-    blockedReason?: string;
-  }>;
+  const parsed = JSON.parse(raw) as Record<string, MutableRouteFixture>;
   mutate(parsed);
   const dir = await tempRoot();
   const configPath = path.join(dir, "brand-routes.json");
