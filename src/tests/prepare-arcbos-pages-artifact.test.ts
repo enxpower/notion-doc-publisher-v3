@@ -42,7 +42,7 @@ test("prepare-arcbos-pages-artifact.sh removes blocked files, keeps safe files, 
   await assertMissing(path.join(root, "reports", "internal.json"));
   await assertMissing(path.join(root, "diagnostics", "trace.json"));
 
-  await assertExists(path.join(root, "docs", "spec.html"));
+  await assertExists(path.join(root, "docs", "ARCBOS-SPEC-2606-0001", "index.html"));
   await assertExists(path.join(root, "assets", "arcbos-favicon.svg"));
 
   assert.equal(await fs.readFile(path.join(root, "CNAME"), "utf8"), "docs.arcbos.com\n");
@@ -58,13 +58,30 @@ test("prepare-arcbos-pages-artifact.sh fails closed when credential-shaped conte
   });
 });
 
-test("prepare-arcbos-pages-artifact.sh fails closed when generated HTML omits the favicon reference", async () => {
+test("prepare-arcbos-pages-artifact.sh fails closed when a document page omits the favicon reference", async () => {
   const root = await makeValidFixture();
-  await fs.writeFile(path.join(root, "docs", "no-favicon.html"), "<html><head><title>No favicon</title></head><body>content</body></html>\n", "utf8");
+  await fs.mkdir(path.join(root, "docs", "ARCBOS-SPEC-2606-0002"), { recursive: true });
+  await fs.writeFile(
+    path.join(root, "docs", "ARCBOS-SPEC-2606-0002", "index.html"),
+    "<html><head><title>No favicon</title></head><body>content</body></html>\n",
+    "utf8"
+  );
 
   assert.throws(() => {
     execFileSync("bash", [SCRIPT_PATH, root], { stdio: "pipe" });
   });
+});
+
+test("prepare-arcbos-pages-artifact.sh does not require a favicon reference on brand-agnostic portal pages", async () => {
+  const root = await makeValidFixture();
+  await fs.mkdir(path.join(root, "register"), { recursive: true });
+  await fs.mkdir(path.join(root, "clients"), { recursive: true });
+  await fs.writeFile(path.join(root, "index.html"), "<html><head><title>Document Register</title></head><body>portal</body></html>\n", "utf8");
+  await fs.writeFile(path.join(root, "register", "index.html"), "<html><head><title>Document Register</title></head><body>portal</body></html>\n", "utf8");
+  await fs.writeFile(path.join(root, "clients", "index.html"), "<html><head><title>No Public Index</title></head><body>portal</body></html>\n", "utf8");
+
+  const output = execFileSync("bash", [SCRIPT_PATH, root], { encoding: "utf8" });
+  assert.match(output, /ARCBOS Pages artifact prepared and verified/);
 });
 
 function safeHtml(): string {
@@ -73,9 +90,9 @@ function safeHtml(): string {
 
 async function makeValidFixture(): Promise<string> {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "arcbos-pages-artifact-test-"));
-  await fs.mkdir(path.join(root, "docs"), { recursive: true });
+  await fs.mkdir(path.join(root, "docs", "ARCBOS-SPEC-2606-0001"), { recursive: true });
   await fs.mkdir(path.join(root, "assets"), { recursive: true });
-  await fs.writeFile(path.join(root, "docs", "spec.html"), safeHtml(), "utf8");
+  await fs.writeFile(path.join(root, "docs", "ARCBOS-SPEC-2606-0001", "index.html"), safeHtml(), "utf8");
   await fs.writeFile(path.join(root, "assets", "arcbos-favicon.svg"), "<svg></svg>\n", "utf8");
   return root;
 }
