@@ -220,28 +220,7 @@ jobs:
 
       - name: Prepare sanitized ARCBOS Pages artifact
         if: ${{ steps.arcbos-artifact.outputs.required == 'true' }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          artifact_root="targets/arcbos-pages"
-          test -d "$artifact_root"
-          printf 'docs.arcbos.com\n' > "$artifact_root/CNAME"
-          touch "$artifact_root/.nojekyll"
-          find "$artifact_root" -type f \( \
-            -name '*.typ' -o -name '.env' -o -name '.env.*' \
-            -o -iname '*backup*' -o -iname '*audit* -o -iname '*diagnostic*' \
-            -o -path '*/reports/*' -o -path '*/diagnostics/*' \
-          \) -delete
-          blocked_count="$(find "$artifact_root" -type f \( -name '*.typ' -o -name '.env' -o -name '.env.*' -o -path '*/reports/*' -o -path '*/diagnostics/*' \) | wc -l | tr -d ' ')"
-          if [ "$blocked_count" != "0" ]; then
-            echo "Blocked files remain in ARCBOS Pages artifact: $blocked_count"
-            exit 1
-          fi
-          secret_match_count="$({ grep -RIE 'github_pat_|gh[pousr]_|ntn_|Bearer[[:space:]]+[A-Za-z0-9._-]{20,}' "$artifact_root" || true; } | wc -l | tr -d ' ')"
-          if [ "$secret_match_count" != "0" ]; then
-            echo "Credential-shaped content blocked from ARCBOS Pages artifact: $secret_match_count"
-            exit 1
-          fi
+        run: bash scripts/prepare-arcbos-pages-artifact.sh targets/arcbos-pages
 
       - name: Configure GitHub Pages for ARCBOS
         if: ${{ steps.arcbos-artifact.outputs.required == 'true' }}
