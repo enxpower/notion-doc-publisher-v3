@@ -186,9 +186,42 @@ jobs:
             echo "required=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Install Typst for render work
+      - name: Install pinned Typst for render work
         if: ${{ steps.render-work.outputs.required == 'true' }}
-        uses: typst-community/setup-typst@v4
+        shell: bash
+        env:
+          TYPST_VERSION: "0.13.1"
+        run: |
+          set -euo pipefail
+
+          install_dir="$HOME/.local/bin"
+          mkdir -p "$install_dir"
+
+          archive_url="https://github.com/typst/typst/releases/download/v${TYPST_VERSION}/typst-x86_64-unknown-linux-musl.tar.xz"
+          archive_path="$RUNNER_TEMP/typst.tar.xz"
+          extract_dir="$RUNNER_TEMP/typst-extract"
+
+          if curl             --fail             --location             --retry 8             --retry-all-errors             --retry-delay 10             --connect-timeout 30             --max-time 300             "$archive_url"             --output "$archive_path"; then
+
+            rm -rf "$extract_dir"
+            mkdir -p "$extract_dir"
+            tar -xJf "$archive_path" -C "$extract_dir"
+
+            typst_binary="$(find "$extract_dir" -type f -name typst -perm -u+x | head -n 1)"
+
+            if [ -z "$typst_binary" ]; then
+              echo "Typst binary was not found in the downloaded archive."
+              exit 1
+            fi
+
+            install -m 0755 "$typst_binary" "$install_dir/typst"
+          else
+            echo "Direct Typst download failed. Falling back to crates.io."
+            cargo install               --locked               --version "$TYPST_VERSION"               --root "$HOME/.local"               typst-cli
+          fi
+
+          echo "$install_dir" >> "$GITHUB_PATH"
+          "$install_dir/typst" --version
 
       - name: Install CJK and Latin fonts for render work
         if: ${{ steps.render-work.outputs.required == 'true' }}
