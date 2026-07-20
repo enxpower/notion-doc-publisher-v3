@@ -420,8 +420,8 @@ test("incremental content publish workflow is manual, guarded, and route-bounded
   assert.ok(!operationalWorkflow.includes("npm run ci:writeback"));
   assert.ok(!operationalWorkflow.includes("npm run writeback:routed"));
   assert.ok(!operationalWorkflow.includes("preview-publish"));
-  assert.ok(!operationalWorkflow.includes("actions/deploy-pages"));
-  assert.ok(!operationalWorkflow.includes("actions/upload-pages-artifact"));
+  assert.ok(operationalWorkflow.includes("actions/deploy-pages"));
+  assert.ok(operationalWorkflow.includes("actions/upload-pages-artifact"));
 });
 
 test("legacy build has an explicit no-autofill validation mode without changing default build script", async () => {

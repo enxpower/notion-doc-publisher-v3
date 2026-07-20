@@ -54,25 +54,28 @@ test("incremental apply creates only action documents and writes lifecycle succe
   assert.equal(await fs.readFile(path.join(fixture.repositories.AGIM!, "index.html"), "utf8"), "existing agim portal\n");
 });
 
-test("incremental apply fails closed for ARCBOS Pages artifact changes without artifact support", async () => {
+test("incremental apply rebuilds a complete ARCBOS Pages artifact when ARCBOS changes", async () => {
   const fixture = await makeFixture();
   const arcbosDocument = fixture.documents.find((document) => normalizeBrand(document.meta.brand.label) === "ARCBOS")!;
   const plan = createIncrementalPlan({ documents: [arcbosDocument], routes: fixture.routes, config: fixture.config, now: NOW });
 
-  await assert.rejects(
-    () => executeIncrementalApply({
-      documents: [arcbosDocument],
-      routes: fixture.routes,
-      config: fixture.config,
-      plan,
-      repositoryRoots: fixture.repositories,
-      stagingRoot: fixture.stagingRoot,
-      mode: "apply",
-      now: NOW,
-      pdfRenderer: createFixtureRoutedPdfRenderer()
-    }),
-    /requires github-pages-artifact deployment support/
-  );
+  const result = await executeIncrementalApply({
+    documents: [arcbosDocument],
+    routes: fixture.routes,
+    config: fixture.config,
+    plan,
+    repositoryRoots: fixture.repositories,
+    stagingRoot: fixture.stagingRoot,
+    mode: "apply",
+    now: NOW,
+    pdfRenderer: createFixtureRoutedPdfRenderer()
+  });
+
+  assert.equal(result.recordResults[0]?.status, "success");
+  assert.equal(result.deployedBrandCount, 1);
+  await assertFileExists(path.join(fixture.repositories.ARCBOS!, "docs", "ARCBOS-SPEC-2606-0001", "index.html"));
+  await assertFileExists(path.join(fixture.repositories.ARCBOS!, "pdf", "ARCBOS-SPEC-2606-0001.pdf"));
+  await assertFileExists(path.join(fixture.repositories.ARCBOS!, "assets", "arcbos-favicon.svg"));
 });
 
 test("incremental apply NOOP renders nothing, deploys nothing, and does not mutate Notion", async () => {

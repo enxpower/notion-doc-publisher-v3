@@ -80,6 +80,9 @@ export async function executeIncrementalApply(input: {
   const renderRecords = documentsToRender(input.plan);
   const removeRecords = documentsToRemove(input.plan);
   const changedBrands = new Set([...renderRecords, ...removeRecords].map((record) => normalizeBrand(record.brand)));
+  const artifactChangedBrands = new Set(
+    [...changedBrands].filter((brand) => routesByBrand.get(brand)?.deploymentMode === "github-pages-artifact")
+  );
   const recordResults: IncrementalApplyResult["recordResults"] = input.plan.records.map((record) => ({
     action: record.action,
     brand: record.brand,
@@ -120,8 +123,21 @@ export async function executeIncrementalApply(input: {
   await assertRepositoryRoots(input.repositoryRoots, changedBrands, routesByBrand);
   const stagedRoutes = input.routes.map((route) => routeWithOutputRoot(route, path.resolve(input.stagingRoot)));
   const documentsByPageId = new Map(input.documents.map((document) => [document.source.notionPageId, document]));
-  const renderDocuments = renderRecords.flatMap((record) => {
-    const document = documentsByPageId.get(record.pageId);
+  const renderPageIds = new Set(renderRecords.map((record) => record.pageId));
+
+  for (const record of input.plan.records) {
+    const brand = normalizeBrand(record.desired?.brand ?? record.brand);
+    if (!artifactChangedBrands.has(brand) || !record.desired) {
+      continue;
+    }
+    if (record.action === "REMOVE" || record.action === "INVALID" || record.action === "FILTERED") {
+      continue;
+    }
+    renderPageIds.add(record.pageId);
+  }
+
+  const renderDocuments = [...renderPageIds].flatMap((pageId) => {
+    const document = documentsByPageId.get(pageId);
     return document ? [document] : [];
   });
   const builtBrands = new Set<string>();
@@ -152,7 +168,9 @@ export async function executeIncrementalApply(input: {
       if (!route || !repositoryRoot) {
         throw new UserFacingError(`Missing staged route or repository root for ${brand}.`);
       }
-      const filesToCopy = filesToCopyForBrand(manifest.files, renderRecords, brand, route);
+      const filesToCopy = route.deploymentMode === "github-pages-artifact"
+        ? manifest.files
+        : filesToCopyForBrand(manifest.files, renderRecords, brand, route);
       for (const file of filesToCopy) {
         if (!isSafeRelativePublicPath(file)) {
           throw new UserFacingError(`Unsafe staged artifact path is blocked: ${file}`);
@@ -195,8 +213,9 @@ export async function executeIncrementalApply(input: {
       setRecordResult(recordResults, record, "failed", "MISSING_PREVIOUS_ROUTE_OR_REPOSITORY");
       continue;
     }
-    const files = deletionPlanForRecord(record, route);
-    const removed = await removeOwnedFiles({ repositoryRoot, files, route });
+    const removed = route.deploymentMode === "github-pages-artifact"
+      ? []
+      : await removeOwnedFiles({ repositoryRoot, files: deletionPlanForRecord(record, route), route });
     deletedFileCount += removed.length;
     const brandResult = brandResults.get(brand);
     if (brandResult) {
@@ -216,6 +235,9 @@ export async function executeIncrementalApply(input: {
     const repositoryRoot = input.repositoryRoots[previousBrand];
     if (!previousRoute || !repositoryRoot) {
       setRecordResult(recordResults, record, "failed", "MISSING_PREVIOUS_ROUTE_OR_REPOSITORY");
+      continue;
+    }
+    if (previousRoute.deploymentMode === "github-pages-artifact") {
       continue;
     }
     const files = moveDeletionPlan(record, previousRoute);
@@ -292,10 +314,13 @@ async function assertRepositoryRoots(
     if (!route?.targetRepository || route.repositoryConfirmed !== true) {
       throw new UserFacingError(`Target repository for ${brand} is not confirmed.`);
     }
+    if (route.deploymentMode === "github-pages-artifact") {
+      await fs.rm(root, { recursive: true, force: true });
+      await fs.mkdir(root, { recursive: true });
+      continue;
+    }
     if ((route.deploymentMode ?? "branch") !== "branch") {
-      throw new UserFacingError(
-        `Incremental apply for ${brand} requires ${route.deploymentMode} deployment support and cannot use a branch repository root.`
-      );
+      throw new UserFacingError(`Unsupported deployment mode for ${brand}: ${route.deploymentMode}.`);
     }
     const stat = await fs.stat(root).catch(() => undefined);
     if (!stat?.isDirectory()) {
