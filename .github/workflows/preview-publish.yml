@@ -2,23 +2,9 @@ name: Preview Publish
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "0 6,18 * * *"
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/preview-publish.yml"
-      - "src/**"
-      - "styles/**"
-      - "templates/**"
-      - "package.json"
-      - "package-lock.json"
-      - "tsconfig.json"
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
   group: preview-publish
@@ -27,9 +13,6 @@ concurrency:
 jobs:
   preview-publish:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ vars.PREVIEW_BASE_URL }}
 
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -41,16 +24,20 @@ jobs:
       # - PUBLISHABLE_STATUSES
       # - BRAND_TOKENS_JSON
       # - DOCUMENT_TYPE_TOKENS_JSON
-      # - PREVIEW_DEPLOY_ENABLED
-      # - PREVIEW_BASE_URL
       NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
       NOTION_DATABASE_ID: ${{ vars.NOTION_DATABASE_ID || secrets.NOTION_DATABASE_ID }}
       ALLOWED_VISIBILITY: ${{ vars.ALLOWED_VISIBILITY || secrets.ALLOWED_VISIBILITY }}
       PUBLISHABLE_STATUSES: ${{ vars.PUBLISHABLE_STATUSES || secrets.PUBLISHABLE_STATUSES }}
       BRAND_TOKENS_JSON: ${{ vars.BRAND_TOKENS_JSON || secrets.BRAND_TOKENS_JSON }}
       DOCUMENT_TYPE_TOKENS_JSON: ${{ vars.DOCUMENT_TYPE_TOKENS_JSON || secrets.DOCUMENT_TYPE_TOKENS_JSON }}
-      PREVIEW_DEPLOY_ENABLED: ${{ vars.PREVIEW_DEPLOY_ENABLED || secrets.PREVIEW_DEPLOY_ENABLED }}
-      PREVIEW_BASE_URL: ${{ vars.PREVIEW_BASE_URL || secrets.PREVIEW_BASE_URL }}
+      # Preview Publish is a manual QA workflow only. It must never deploy to
+      # GitHub Pages or claim a production publish in Notion: Incremental
+      # Content Publish (.github/workflows/incremental-content-publish.yml)
+      # is the sole owner of the production ARCBOS Pages artifact and of
+      # production PUBLISHED_URL / BUILD_STATUS writeback. This is hardcoded
+      # rather than sourced from a repository variable so it cannot drift
+      # from an operator forgetting to leave a toggle off.
+      PREVIEW_DEPLOY_ENABLED: "false"
       ALLOWED_BRANDS: ${{ vars.ALLOWED_BRANDS || secrets.ALLOWED_BRANDS || 'ARCBOS' }}
 
     steps:
@@ -68,29 +55,6 @@ jobs:
               exit 1
               ;;
           esac
-
-      - name: Resolve deployment settings
-        id: preview
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          enabled="$(printf '%s' "${PREVIEW_DEPLOY_ENABLED:-}" | tr '[:upper:]' '[:lower:]' | xargs)"
-          base_url="$(printf '%s' "${PREVIEW_BASE_URL:-}" | xargs)"
-
-          if [ "$enabled" = "true" ]; then
-            if [ -z "$base_url" ]; then
-              echo "PREVIEW_BASE_URL is required when PREVIEW_DEPLOY_ENABLED=true."
-              exit 1
-            fi
-            echo "enabled=true" >> "$GITHUB_OUTPUT"
-            echo "Preview deployment enabled."
-          else
-            echo "enabled=false" >> "$GITHUB_OUTPUT"
-            echo "Preview deployment disabled."
-          fi
-
-          echo "base_url=$base_url" >> "$GITHUB_OUTPUT"
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -135,89 +99,18 @@ jobs:
           PDF_REQUIRED: ${{ vars.PDF_REQUIRED || 'false' }}
         run: npm run pdf:site
 
-      - name: Prepare public Pages artifact
-        if: steps.preview.outputs.enabled == 'true' && steps.build.outcome == 'success'
-        shell: bash
-        run: |
-          set -euo pipefail
-          rm -rf dist-pages
-          mkdir dist-pages
-          cp -R dist/. dist-pages/
-
-          find dist-pages -type f \( \
-            -name '*.typ' \
-            -o -name '.env' \
-            -o -name '.env.*' \
-            -o -iname '*backup*' \
-            -o -iname '*audit*' \
-            -o -iname '*correlation*' \
-            -o -iname '*diagnostic*' \
-            -o -path '*/reports/*' \
-            -o -path '*/routes/*' \
-            -o -path '*/routes-readonly/*' \
-            -o -path '*/routed-url-writeback/*' \
-            -o -path '*/diagnostics/*' \
-            -o -path '*/reconciliation/*' \
-            -o -path '*/security-cleanup/*' \
-          \) -delete
-          find dist-pages -type d -empty -delete
-
-          blocked_count="$(find dist-pages -type f \( \
-            -name '*.typ' \
-            -o -name '.env' \
-            -o -name '.env.*' \
-            -o -iname '*backup*' \
-            -o -iname '*audit*' \
-            -o -iname '*correlation*' \
-            -o -iname '*diagnostic*' \
-            -o -path '*/reports/*' \
-            -o -path '*/routes/*' \
-            -o -path '*/routes-readonly/*' \
-            -o -path '*/routed-url-writeback/*' \
-            -o -path '*/diagnostics/*' \
-            -o -path '*/reconciliation/*' \
-            -o -path '*/security-cleanup/*' \
-          \) | wc -l | tr -d ' ')"
-          if [ "$blocked_count" != "0" ]; then
-            echo "Private or intermediate files remain in Pages artifact: $blocked_count"
-            exit 1
-          fi
-
-          secret_match_count="$({ grep -RIE 'github_pat_|gh[pousr]_|ntn_|Bearer[[:space:]]+[A-Za-z0-9._-]{20,}' dist-pages || true; } | wc -l | tr -d ' ')"
-          if [ "$secret_match_count" != "0" ]; then
-            echo "Credential-shaped content blocked from Pages artifact: $secret_match_count"
-            exit 1
-          fi
-
-      - name: Configure GitHub Pages
-        if: steps.preview.outputs.enabled == 'true' && steps.build.outcome == 'success'
-        uses: actions/configure-pages@v5
-
-      - name: Upload Pages artifact
-        if: steps.preview.outputs.enabled == 'true' && steps.build.outcome == 'success'
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: dist-pages
-
-      - name: Deploy preview to GitHub Pages
-        id: deploy
-        continue-on-error: true
-        if: steps.preview.outputs.enabled == 'true' && steps.build.outcome == 'success'
-        uses: actions/deploy-pages@v4
-
-      - name: Preview deployment skipped
-        if: steps.preview.outputs.enabled != 'true' && steps.build.outcome == 'success'
-        run: echo "PREVIEW_DEPLOY_ENABLED is not true. Built dist/ but skipped preview deployment."
+      - name: Preview deployment disabled
+        if: steps.build.outcome == 'success'
+        run: echo "Preview Publish is a manual QA workflow and never deploys to GitHub Pages. Built dist/ only."
 
       - name: Write results back to Notion
         if: always() && steps.build.outcome != 'skipped'
         env:
           BUILD_RESULT: ${{ steps.build.outcome }}
-          DEPLOY_RESULT: ${{ steps.deploy.outcome }}
         run: npm run ci:writeback
 
-      - name: Fail workflow when build or deploy failed
-        if: steps.build.outcome != 'success' || (steps.preview.outputs.enabled == 'true' && steps.deploy.outcome != 'success')
+      - name: Fail workflow when build failed
+        if: steps.build.outcome != 'success'
         run: |
-          echo "Preview publish failed during build or preview deployment. Notion write-back has been attempted."
+          echo "Preview publish failed during build. Notion write-back has been attempted."
           exit 1

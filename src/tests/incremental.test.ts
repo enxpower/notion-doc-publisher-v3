@@ -387,7 +387,7 @@ test("incremental content plan workflow is manual, fast, and non-mutating", asyn
   assert.ok(!operationalWorkflow.includes("actions/upload-pages-artifact"));
 });
 
-test("incremental content publish workflow is manual, guarded, and route-bounded", async () => {
+test("incremental content publish workflow is scheduled exactly once daily, guarded, and route-bounded", async () => {
   const workflow = await fs.readFile(path.resolve(".github/workflows/incremental-content-publish.yml"), "utf8");
   const operationalWorkflow = workflow.replace(
     /      - name: Validate workflow safety[\s\S]*?(?=      - name: Dry-run incremental publish)/,
@@ -397,9 +397,27 @@ test("incremental content publish workflow is manual, guarded, and route-bounded
   assert.ok(workflow.includes("workflow_dispatch:"));
   assert.ok(!workflow.includes("push:"));
   assert.ok(!workflow.includes("pull_request:"));
-  assert.ok(!workflow.includes("schedule:"));
+  assert.ok(workflow.includes("schedule:"));
+  const cronLines = [...workflow.matchAll(/- cron: "([^"]+)"/g)];
+  assert.equal(cronLines.length, 1, "exactly one cron schedule is permitted");
+  assert.equal(cronLines[0]![1], "0 9 * * *", "the single daily production schedule must run at the documented UTC time");
+  assert.ok(workflow.includes("github.event_name == 'schedule'"), "the job guard must explicitly permit schedule events");
+  assert.ok(
+    /elif \[ "\$GITHUB_EVENT_NAME" = "schedule" \];\s*then\s*[\s\S]*?mode="apply"/.test(workflow),
+    "scheduled runs must resolve to the real apply path, not dry-run"
+  );
   assert.ok(workflow.includes("confirm_production"));
   assert.ok(workflow.includes("PHASE2-INCREMENTAL-PUBLISH"));
+  assert.ok(
+    workflow.includes('[ "$mode" = "apply" ] && [ "$DISPATCH_CONFIRMATION" != "PHASE2-INCREMENTAL-PUBLISH" ]'),
+    "manual workflow_dispatch apply must still require the exact confirmation phrase"
+  );
+  assert.ok(
+    workflow.includes("github.event.issue.number == 44") &&
+      workflow.includes("github.actor == 'enxpower'") &&
+      workflow.includes("startsWith(github.event.comment.body, '/phase2-publish PHASE2-INCREMENTAL-PUBLISH ')"),
+    "issue-comment apply must stay restricted to Issue #44, actor enxpower, and the exact command prefix"
+  );
   assert.ok(!workflow.includes("DEPLOY_KEY_ARCBOS"));
   assert.ok(workflow.includes("DEPLOY_KEY_ENERGIZE"));
   assert.ok(workflow.includes("DEPLOY_KEY_AGIM"));

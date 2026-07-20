@@ -17,6 +17,11 @@ on:
         default: ""
   issue_comment:
     types: [created]
+  # Single daily production run. 09:00 UTC is 02:00 America/Vancouver during
+  # PDT (UTC-7, roughly Mar-Nov) and 01:00 America/Vancouver during PST
+  # (UTC-8, the rest of the year) — off-hours in both cases.
+  schedule:
+    - cron: "0 9 * * *"
 
 permissions:
   contents: read
@@ -32,6 +37,7 @@ jobs:
   publish:
     if: >-
       github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'schedule' ||
       (github.event_name == 'issue_comment' &&
        github.event.issue.number == 44 &&
        github.actor == 'enxpower' &&
@@ -74,6 +80,11 @@ jobs:
               echo "Issue command format is invalid."
               exit 1
             fi
+            mode="apply"
+          elif [ "$GITHUB_EVENT_NAME" = "schedule" ]; then
+            # The single daily production schedule is the pre-authorized
+            # equivalent of a confirmed manual apply run; no confirmation
+            # phrase applies to a schedule trigger.
             mode="apply"
           else
             mode="${DISPATCH_MODE:-dry-run}"

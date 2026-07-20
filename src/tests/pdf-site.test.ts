@@ -352,23 +352,27 @@ test("preview-publish.yml pdf:site step references PDF_REQUIRED env var", async 
   );
 });
 
-// ── 14. Preview Pages artifact excludes private/intermediate files ───────────
+// ── 14. Preview Publish never deploys to GitHub Pages ────────────────────────
 
-test("preview-publish.yml uploads a sanitized public Pages artifact", async () => {
+test("preview-publish.yml is workflow_dispatch-only and cannot deploy to GitHub Pages", async () => {
   const src = await fs.readFile(
     path.resolve(".github/workflows/preview-publish.yml"),
     "utf8"
   );
 
-  assert.ok(src.includes("Prepare public Pages artifact"));
-  assert.ok(src.includes("rm -rf dist-pages"));
-  assert.ok(src.includes("cp -R dist/. dist-pages/"));
-  assert.ok(src.includes("-name '*.typ'"), "Typst intermediates must be excluded from the public Pages artifact");
-  assert.ok(src.includes("-path '*/reports/*'"), "build reports must be excluded from the public Pages artifact");
-  assert.ok(src.includes("-path '*/routed-url-writeback/*'"), "writeback artifacts must be excluded from Pages");
-  assert.ok(src.includes("Credential-shaped content blocked from Pages artifact"));
-  assert.ok(src.includes("path: dist-pages"), "Pages upload must use the sanitized artifact root");
-  assert.ok(!src.includes("path: dist\n"), "Pages upload must not publish raw dist");
+  assert.ok(src.includes("workflow_dispatch:"), "Preview Publish must support manual QA runs");
+  assert.ok(!src.includes("schedule:"), "Preview Publish must not run on any schedule");
+  assert.ok(!src.includes("push:"), "Preview Publish must not run automatically on push");
+  assert.ok(!src.includes("actions/configure-pages"), "Preview Publish must not configure GitHub Pages");
+  assert.ok(!src.includes("actions/upload-pages-artifact"), "Preview Publish must not upload a Pages artifact");
+  assert.ok(!src.includes("actions/deploy-pages"), "Preview Publish must not deploy to GitHub Pages");
+  assert.ok(!src.includes("pages: write"), "Preview Publish must not hold Pages deployment permission");
+  assert.ok(!src.includes("id-token: write"), "Preview Publish must not hold the OIDC token permission Pages deploy requires");
+  assert.ok(!src.includes("environment:\n      name: github-pages"), "Preview Publish must not target the github-pages deployment environment");
+  assert.ok(
+    src.includes('PREVIEW_DEPLOY_ENABLED: "false"'),
+    "PREVIEW_DEPLOY_ENABLED must be hardcoded false so a stale repository variable cannot re-enable deployment"
+  );
 });
 
 // ── 15. Existing HTML renderer content is unchanged ──────────────────────────
