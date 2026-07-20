@@ -2,19 +2,6 @@ name: Incremental Content Publish
 
 on:
   workflow_dispatch:
-    inputs:
-      mode:
-        description: "Run mode"
-        type: choice
-        required: true
-        default: dry-run
-        options:
-          - dry-run
-          - apply
-      confirm_production:
-        description: "Type PHASE2-INCREMENTAL-PUBLISH to permit apply mode"
-        required: false
-        default: ""
   issue_comment:
     types: [created]
   # Single daily production run. 09:00 UTC is 02:00 America/Vancouver during
@@ -70,8 +57,6 @@ jobs:
         id: execution
         shell: bash
         env:
-          DISPATCH_MODE: ${{ inputs.mode }}
-          DISPATCH_CONFIRMATION: ${{ inputs.confirm_production }}
           COMMENT_BODY: ${{ github.event.comment.body }}
         run: |
           set -euo pipefail
@@ -80,24 +65,11 @@ jobs:
               echo "Issue command format is invalid."
               exit 1
             fi
-            mode="apply"
-          elif [ "$GITHUB_EVENT_NAME" = "schedule" ]; then
-            # The single daily production schedule is the pre-authorized
-            # equivalent of a confirmed manual apply run; no confirmation
-            # phrase applies to a schedule trigger.
-            mode="apply"
-          else
-            mode="${DISPATCH_MODE:-dry-run}"
-            if [ "$mode" = "apply" ] && [ "$DISPATCH_CONFIRMATION" != "PHASE2-INCREMENTAL-PUBLISH" ]; then
-              echo "Apply mode requires exact confirmation."
-              exit 1
-            fi
-          fi
-          if [ "$mode" != "dry-run" ] && [ "$mode" != "apply" ]; then
-            echo "Unsupported mode: $mode"
+          elif [ "$GITHUB_EVENT_NAME" != "workflow_dispatch" ] && [ "$GITHUB_EVENT_NAME" != "schedule" ]; then
+            echo "Unsupported trigger: $GITHUB_EVENT_NAME"
             exit 1
           fi
-          echo "mode=$mode" >> "$GITHUB_OUTPUT"
+          echo "mode=apply" >> "$GITHUB_OUTPUT"
 
       - name: Load verified GitHub SSH host keys
         id: github-host-keys
