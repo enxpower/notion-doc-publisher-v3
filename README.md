@@ -20,6 +20,16 @@ Production lifecycle verification has been completed for:
 
 The final production NOOP proof confirmed zero rendering, zero PDF generation, zero target deployment, zero file mutations, and zero Notion mutations for unchanged records.
 
+## Production Baseline
+
+Current sealed production baseline:
+- [docs/PHASE2_BASELINE.md](docs/PHASE2_BASELINE.md)
+
+Release history:
+- [docs/RELEASE_NOTES.md](docs/RELEASE_NOTES.md)
+
+All future development must continue from the sealed Phase 2 baseline and repository governance documents.
+
 ## Production principles
 
 - Notion is the only editing source.

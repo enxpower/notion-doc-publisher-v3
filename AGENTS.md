@@ -9,6 +9,7 @@ Before doing any work, every Codex, Claude Code, or other AI coding agent must r
 3. `/docs/PRODUCT_CONSTITUTION.md`
 4. `/docs/SYSTEM_ARCHITECTURE.md`
 5. `/docs/ENGINEERING_GOVERNANCE.md`
+6. `/docs/PHASE2_BASELINE.md` — the current sealed production baseline and operating state. Read after the five documents above; if it ever conflicts with one of them, those documents win, not this one.
 
 Do not edit files before reading these documents.
 
@@ -25,7 +26,7 @@ Do not edit files before reading these documents.
 
 ## Required workflow
 
-1. Read all five governing/context documents.
+1. Read all six governing/context/baseline documents.
 2. Explain how the requested task complies with them.
 3. Inspect open PRs and current branch context.
 4. Create or use a feature branch.
@@ -42,7 +43,7 @@ Do not edit files before reading these documents.
 If a new AI coding-agent session starts with limited chat memory, it must recover project context from the repository itself:
 
 1. Read this `AGENTS.md` file.
-2. Read all five documents listed above.
+2. Read all six documents listed above, starting with `/docs/PHASE2_BASELINE.md` for the fastest orientation on current sealed production state.
 3. Inspect open PRs.
 4. Treat GitHub as the source of truth, not prior chat memory.
 
