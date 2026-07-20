@@ -381,3 +381,26 @@ Further work should be treated as a new governed phase or a narrowly scoped prod
 4. Uncheck `Publish` to remove.
 5. Run the approved Incremental Content Publish workflow.
 6. Review the lifecycle result and verified production URL.
+
+### Post-seal defect repair (2026-07-20)
+
+Narrowly scoped production defect repair, applied without reopening Phase 2 design:
+
+- The inline ARCBOS Pages artifact sanitation step had an unterminated
+  shell quote, blocking every step downstream of it (Pages deploy,
+  live verification, private state persistence, Notion writeback).
+  Moved to `scripts/prepare-arcbos-pages-artifact.sh`, a syntax-checked
+  and unit-tested script (PR #49).
+- `typst-community/setup-typst@v4` resolves versions through the
+  GitHub releases API, which is a single point of failure during
+  GitHub API incidents. Replaced with a pinned direct-download install
+  with a crates.io fallback (PR #50).
+- The artifact script's favicon-reference check originally covered
+  every HTML file, including the brand-agnostic portal pages
+  (`index.html`, `register/index.html`, namespace roots) that
+  `render-html.ts` renders without a per-brand favicon `<link>` for
+  any brand. Scoped the check to actual document pages (PR #51).
+
+Verified in production: ARCBOS Pages artifact deploy, live favicon for
+all four brands, private state persistence, and Notion writeback all
+succeeded end to end, followed by a verified zero-work NOOP run.
