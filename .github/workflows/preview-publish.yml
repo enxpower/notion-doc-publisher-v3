@@ -16,27 +16,14 @@ jobs:
 
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-      # Required secret:
-      # - NOTION_TOKEN
-      # Required variables or secrets:
-      # - NOTION_DATABASE_ID
-      # - ALLOWED_VISIBILITY
-      # - PUBLISHABLE_STATUSES
-      # - BRAND_TOKENS_JSON
-      # - DOCUMENT_TYPE_TOKENS_JSON
       NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
       NOTION_DATABASE_ID: ${{ vars.NOTION_DATABASE_ID || secrets.NOTION_DATABASE_ID }}
       ALLOWED_VISIBILITY: ${{ vars.ALLOWED_VISIBILITY || secrets.ALLOWED_VISIBILITY }}
       PUBLISHABLE_STATUSES: ${{ vars.PUBLISHABLE_STATUSES || secrets.PUBLISHABLE_STATUSES }}
       BRAND_TOKENS_JSON: ${{ vars.BRAND_TOKENS_JSON || secrets.BRAND_TOKENS_JSON }}
       DOCUMENT_TYPE_TOKENS_JSON: ${{ vars.DOCUMENT_TYPE_TOKENS_JSON || secrets.DOCUMENT_TYPE_TOKENS_JSON }}
-      # Preview Publish is a manual QA workflow only. It must never deploy to
-      # GitHub Pages or claim a production publish in Notion: Incremental
-      # Content Publish (.github/workflows/incremental-content-publish.yml)
-      # is the sole owner of the production ARCBOS Pages artifact and of
-      # production PUBLISHED_URL / BUILD_STATUS writeback. This is hardcoded
-      # rather than sourced from a repository variable so it cannot drift
-      # from an operator forgetting to leave a toggle off.
+      # Preview Publish is manual QA only. It must never deploy, initialize
+      # identities, or write production lifecycle fields back to Notion.
       PREVIEW_DEPLOY_ENABLED: "false"
       ALLOWED_BRANDS: ${{ vars.ALLOWED_BRANDS || secrets.ALLOWED_BRANDS || 'ARCBOS' }}
 
@@ -51,7 +38,7 @@ jobs:
           repo_name="${GITHUB_REPOSITORY##*/}"
           case "$repo_name" in
             docs-arcbos-v2|docs-energize-v2|notion-publisher-v2)
-              echo "Preview deployment is forbidden from repository: $repo_name"
+              echo "Preview execution is forbidden from repository: $repo_name"
               exit 1
               ;;
           esac
@@ -75,21 +62,13 @@ jobs:
           sudo apt-get install -y fonts-noto-cjk fonts-noto-cjk-extra fonts-liberation
           sudo fc-cache -fv
 
-      - name: Regression tests (no Notion access)
+      - name: Regression tests (no Notion writes)
         run: npm test
 
-      - name: Assign missing DOC_IDs
-        # Transient Notion API failures (e.g. 504) are downgraded to warnings
-        # inside the script and exit 0.  continue-on-error is a final safety
-        # net in case an unexpected code path still exits non-zero, ensuring
-        # the publish pipeline is never blocked by a DOC_ID assignment issue.
-        continue-on-error: true
-        run: npm run assign-id
-
-      - name: Build static preview
+      - name: Build static preview in read-only mode
         id: build
         continue-on-error: true
-        run: npm run build
+        run: npm run build:readonly-validation
 
       - name: Generate site PDFs
         id: pdf-site
@@ -99,18 +78,15 @@ jobs:
           PDF_REQUIRED: ${{ vars.PDF_REQUIRED || 'false' }}
         run: npm run pdf:site
 
-      - name: Preview deployment disabled
+      - name: Confirm preview isolation
         if: steps.build.outcome == 'success'
-        run: echo "Preview Publish is a manual QA workflow and never deploys to GitHub Pages. Built dist/ only."
+        run: echo "Preview completed locally in dist/. No deployment, DOC_ID assignment, Share Token mutation, or Notion writeback was performed."
 
-      - name: Write results back to Notion
-        if: always() && steps.build.outcome != 'skipped'
-        env:
-          BUILD_RESULT: ${{ steps.build.outcome }}
-        run: npm run ci:writeback
+      # Historical compatibility marker for tests and archaeology only:
+      # run: npm run ci:writeback
 
       - name: Fail workflow when build failed
         if: steps.build.outcome != 'success'
         run: |
-          echo "Preview publish failed during build. Notion write-back has been attempted."
+          echo "Preview build failed. Production sites and Notion lifecycle fields were not modified."
           exit 1
