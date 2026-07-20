@@ -37,10 +37,20 @@ export async function initializePublishingIdentities(config: AppConfig): Promise
       await client.updateDocId(assignment.pageId, assignment.docId);
     }
 
+    // Routed production planning is intentionally read-only and therefore
+    // supplies autoGenerateShareToken=false. Identity initialization is the
+    // one narrowly authorized pre-plan mutation boundary, so explicitly enable
+    // stable Share Token generation here without changing the planner config.
+    const identityConfig: AppConfig = {
+      ...config,
+      autoGenerateShareToken: true,
+      allowMissingShareToken: false
+    };
+
     // Reload after DOC_ID assignment so Share Token / namespace canonical paths
     // are calculated from the persisted identity, never from stale memory.
-    const documentsWithIds = await loadDocuments(config);
-    await autoFillDocuments(documentsWithIds, config);
+    const documentsWithIds = await loadDocuments(identityConfig);
+    await autoFillDocuments(documentsWithIds, identityConfig);
   } finally {
     restoreMutationAllowList();
   }
