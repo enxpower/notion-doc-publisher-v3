@@ -1,0 +1,69 @@
+name: Branch Test Alignment Patch
+
+on:
+  push:
+    branches:
+      - release/final-production-seal
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: release/final-production-seal
+      - name: Replace obsolete trigger assertions
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path("src/tests/incremental.test.ts")
+          source = path.read_text()
+          old = '''  assert.ok(workflow.includes("workflow_dispatch:"));
+            assert.ok(!workflow.includes("push:"));
+            assert.ok(!workflow.includes("pull_request:"));
+            assert.ok(workflow.includes("schedule:"));
+            const cronLines = [...workflow.matchAll(/- cron: "([^"]+)"/g)];
+            assert.equal(cronLines.length, 1, "exactly one cron schedule is permitted");
+            assert.equal(cronLines[0]![1], "0 9 * * *", "the single daily production schedule must run at the documented UTC time");
+            assert.ok(workflow.includes("github.event_name == 'schedule'"), "the job guard must explicitly permit schedule events");
+            assert.ok(
+              /elif \\[ "\\$GITHUB_EVENT_NAME" = "schedule" \\];\\s*then\\s*[\\s\\S]*?mode="apply"/.test(workflow),
+              "scheduled runs must resolve to the real apply path, not dry-run"
+            );
+            assert.ok(workflow.includes("confirm_production"));
+            assert.ok(workflow.includes("PHASE2-INCREMENTAL-PUBLISH"));
+            assert.ok(
+              workflow.includes('[ "$mode" = "apply" ] && [ "$DISPATCH_CONFIRMATION" != "PHASE2-INCREMENTAL-PUBLISH" ]'),
+              "manual workflow_dispatch apply must still require the exact confirmation phrase"
+            );'''
+          new = '''  assert.ok(workflow.includes("workflow_dispatch:"));
+            assert.ok(workflow.includes("  workflow_dispatch:\\n  issue_comment:"), "manual dispatch must expose no inputs");
+            assert.ok(!workflow.includes("push:"));
+            assert.ok(!workflow.includes("pull_request:"));
+            assert.ok(workflow.includes("schedule:"));
+            const cronLines = [...workflow.matchAll(/- cron: "([^"]+)"/g)];
+            assert.equal(cronLines.length, 1, "exactly one cron schedule is permitted");
+            assert.equal(cronLines[0]![1], "0 9 * * *", "the single daily production schedule must run at the documented UTC time");
+            assert.ok(workflow.includes("github.event_name == 'schedule'"), "the job guard must explicitly permit schedule events");
+            assert.ok(workflow.includes('echo "mode=apply" >> "$GITHUB_OUTPUT"'), "all approved production triggers must resolve to apply");
+            assert.ok(!workflow.includes("confirm_production"));
+            assert.ok(!workflow.includes("DISPATCH_MODE"));
+            assert.ok(!workflow.includes("DISPATCH_CONFIRMATION"));
+            assert.ok(workflow.includes("PHASE2-INCREMENTAL-PUBLISH"));'''
+          if old not in source:
+              raise SystemExit("obsolete assertion block not found")
+          path.write_text(source.replace(old, new, 1))
+      - name: Remove one-time patch workflow
+        run: rm .github/workflows/branch-test-patch.yml
+      - name: Commit aligned test
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/tests/incremental.test.ts .github/workflows/branch-test-patch.yml
+          git commit -m "test: align production trigger assertions with one-click apply"
+          git push origin HEAD:release/final-production-seal
