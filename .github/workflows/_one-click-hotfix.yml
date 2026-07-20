@@ -1,18 +1,16 @@
 name: Apply One-Click Publish Hotfix
 
 on:
-  issue_comment:
-    types: [created]
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
 
 permissions:
   contents: write
+  actions: write
 
 jobs:
   patch:
-    if: >-
-      github.event.issue.number == 44 &&
-      github.actor == 'enxpower' &&
-      github.event.comment.body == '/apply-one-click-publish-hotfix'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -71,27 +69,16 @@ jobs:
 
           cli_path = Path('src/cli/plan-incremental.ts')
           cli = cli_path.read_text()
-          old = '''  const eventName = process.env.GITHUB_EVENT_NAME ?? "";
-            if (eventName === "schedule" || eventName === "issue_comment") {
-              return true;
-            }
-            if (eventName !== "workflow_dispatch") {
-              return false;
-            }
-
-            const eventPath = process.env.GITHUB_EVENT_PATH;
-            if (!eventPath) {
-              throw new UserFacingError("GITHUB_EVENT_PATH is required to resolve a production workflow_dispatch mode.");
-            }
-            const event = JSON.parse(await fs.readFile(eventPath, "utf8")) as { inputs?: { mode?: unknown } };
-            return event.inputs?.mode === "apply";'''
-          if old not in cli:
-              old = old.replace('            ', '')
-          new = '''  const eventName = process.env.GITHUB_EVENT_NAME ?? "";
-            return eventName === "workflow_dispatch" || eventName === "schedule" || eventName === "issue_comment";'''.replace('            ', '')
-          if old not in cli:
+          cli, count = re.subn(
+              r'''  const eventName = process\.env\.GITHUB_EVENT_NAME \?\? "";\n  if \(eventName === "schedule" \|\| eventName === "issue_comment"\) \{\n    return true;\n  \}\n  if \(eventName !== "workflow_dispatch"\) \{\n    return false;\n  \}\n\n  const eventPath = process\.env\.GITHUB_EVENT_PATH;\n  if \(!eventPath\) \{\n    throw new UserFacingError\("GITHUB_EVENT_PATH is required to resolve a production workflow_dispatch mode\."\);\n  \}\n  const event = JSON\.parse\(await fs\.readFile\(eventPath, "utf8"\)\) as \{ inputs\?: \{ mode\?: unknown \} \};\n  return event\.inputs\?\.mode === "apply";''',
+              '''  const eventName = process.env.GITHUB_EVENT_NAME ?? "";
+          return eventName === "workflow_dispatch" || eventName === "schedule" || eventName === "issue_comment";''',
+              cli,
+              count=1,
+          )
+          if count != 1:
               raise SystemExit('Could not make workflow_dispatch an unconditional production apply')
-          cli_path.write_text(cli.replace(old, new, 1))
+          cli_path.write_text(cli)
 
           Path('.github/workflows/_one-click-hotfix.yml').unlink()
           PY
@@ -105,3 +92,8 @@ jobs:
           git add -A
           git commit -m "fix: make manual production publish one click"
           git push origin HEAD:main
+
+      - name: Start production publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run incremental-content-publish.yml --ref main
