@@ -1,6 +1,11 @@
 name: Apply One-Click Publish Hotfix
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/_one-click-hotfix.yml
   schedule:
     - cron: "*/5 * * * *"
   workflow_dispatch:
