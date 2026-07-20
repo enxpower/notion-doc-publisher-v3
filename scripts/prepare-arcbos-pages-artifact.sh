@@ -55,18 +55,19 @@ fi
 # Shallower HTML files are brand-agnostic portal pages (site root, register,
 # namespace-root placeholders) rendered by shared, non-brand-scoped templates
 # and are out of scope for this artifact-sanitation check.
-document_html_missing_favicon_ref="$(
-  find "$artifact_root" -type f -name '*.html' -print0 \
-    | while IFS= read -r -d '' html_file; do
-        relative_path="${html_file#"$artifact_root"/}"
-        depth="$(printf '%s' "$relative_path" | tr -cd '/' | wc -c | tr -d ' ')"
-        if [ "$depth" -ge 2 ]; then
-          printf '%s\0' "$html_file"
-        fi
-      done \
-    | xargs -0 grep -IL 'arcbos-favicon.svg' 2>/dev/null \
-    | wc -l | tr -d ' '
-)"
+document_html_files=()
+while IFS= read -r -d '' html_file; do
+  relative_path="${html_file#"$artifact_root"/}"
+  depth="$(printf '%s' "$relative_path" | tr -cd '/' | wc -c | tr -d ' ')"
+  if [ "$depth" -ge 2 ]; then
+    document_html_files+=("$html_file")
+  fi
+done < <(find "$artifact_root" -type f -name '*.html' -print0)
+
+document_html_missing_favicon_ref=0
+if [ "${#document_html_files[@]}" -gt 0 ]; then
+  document_html_missing_favicon_ref="$(grep -IL 'arcbos-favicon.svg' "${document_html_files[@]}" 2>/dev/null | wc -l | tr -d ' ')"
+fi
 if [ "$document_html_missing_favicon_ref" != "0" ]; then
   echo "ARCBOS Pages artifact document HTML is missing arcbos-favicon.svg references: $document_html_missing_favicon_ref" >&2
   exit 1

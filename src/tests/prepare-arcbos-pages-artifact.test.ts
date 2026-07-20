@@ -42,7 +42,7 @@ test("prepare-arcbos-pages-artifact.sh removes blocked files, keeps safe files, 
   await assertMissing(path.join(root, "reports", "internal.json"));
   await assertMissing(path.join(root, "diagnostics", "trace.json"));
 
-  await assertExists(path.join(root, "docs", "spec.html"));
+  await assertExists(path.join(root, "docs", "ARCBOS-SPEC-2606-0001", "index.html"));
   await assertExists(path.join(root, "assets", "arcbos-favicon.svg"));
 
   assert.equal(await fs.readFile(path.join(root, "CNAME"), "utf8"), "docs.arcbos.com\n");
@@ -90,9 +90,9 @@ function safeHtml(): string {
 
 async function makeValidFixture(): Promise<string> {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "arcbos-pages-artifact-test-"));
-  await fs.mkdir(path.join(root, "docs"), { recursive: true });
+  await fs.mkdir(path.join(root, "docs", "ARCBOS-SPEC-2606-0001"), { recursive: true });
   await fs.mkdir(path.join(root, "assets"), { recursive: true });
-  await fs.writeFile(path.join(root, "docs", "spec.html"), safeHtml(), "utf8");
+  await fs.writeFile(path.join(root, "docs", "ARCBOS-SPEC-2606-0001", "index.html"), safeHtml(), "utf8");
   await fs.writeFile(path.join(root, "assets", "arcbos-favicon.svg"), "<svg></svg>\n", "utf8");
   return root;
 }
