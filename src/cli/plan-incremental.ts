@@ -6,6 +6,7 @@ import { routedDryRunDocuments, loadRoutedDryRunConfig } from "../fixtures/route
 import { enableNotionReadOnlyMode } from "../notion/read-only-guard.js";
 import { loadDocuments } from "./shared.js";
 import { createIncrementalPlan, type IncrementalStateManifest } from "../routing/incremental.js";
+import { initializePublishingIdentities } from "../routing/publishing-identity-initialization.js";
 import {
   applyReadOnlyPersistedFieldRequirements,
   loadRoutedReadonlyConfigFromEnvironment
@@ -24,6 +25,14 @@ await runCli(async () => {
   );
   const outputPath = path.resolve(process.env.INCREMENTAL_PLAN_PATH ?? "dist/incremental-plan/plan.json");
   const previousState = await readOptionalState(statePath);
+
+  // The sole production publisher resolves apply/dry-run before this command.
+  // Apply runs must initialize system-owned DOC_ID / Share Token values before
+  // the read-only lifecycle plan is created. Dry-runs and the separate manual
+  // planning workflow remain strictly non-mutating.
+  if (!testMode && await isProductionApplyRun()) {
+    await initializePublishingIdentities(config);
+  }
 
   const restoreReadOnly = enableNotionReadOnlyMode("plan:incremental");
   try {
@@ -48,6 +57,27 @@ await runCli(async () => {
     restoreReadOnly();
   }
 });
+
+async function isProductionApplyRun(): Promise<boolean> {
+  if (process.env.GITHUB_WORKFLOW !== "Incremental Content Publish") {
+    return false;
+  }
+
+  const eventName = process.env.GITHUB_EVENT_NAME ?? "";
+  if (eventName === "schedule" || eventName === "issue_comment") {
+    return true;
+  }
+  if (eventName !== "workflow_dispatch") {
+    return false;
+  }
+
+  const eventPath = process.env.GITHUB_EVENT_PATH;
+  if (!eventPath) {
+    throw new UserFacingError("GITHUB_EVENT_PATH is required to resolve a production workflow_dispatch mode.");
+  }
+  const event = JSON.parse(await fs.readFile(eventPath, "utf8")) as { inputs?: { mode?: unknown } };
+  return event.inputs?.mode === "apply";
+}
 
 async function readOptionalState(filePath: string): Promise<IncrementalStateManifest | undefined> {
   try {
