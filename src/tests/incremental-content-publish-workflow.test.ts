@@ -4,6 +4,20 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 const WORKFLOW_PATH = path.resolve(process.cwd(), ".github/workflows/incremental-content-publish.yml");
+const WORKFLOWS_DIR = path.resolve(process.cwd(), ".github/workflows");
+
+async function workflowFiles(): Promise<string[]> {
+  return (await fs.readdir(WORKFLOWS_DIR))
+    .filter((file) => /\.ya?ml$/i.test(file))
+    .sort();
+}
+
+function executableLines(source: string): string {
+  return source
+    .split("\n")
+    .filter((line) => !/^\s*#/.test(line))
+    .join("\n");
+}
 
 test("incremental-content-publish workflow delegates ARCBOS artifact sanitation to the repository script", async () => {
   const workflow = await fs.readFile(WORKFLOW_PATH, "utf8");
@@ -33,7 +47,6 @@ test("incremental-content-publish workflow persists private state only after liv
 
 test("incremental-content-publish workflow does not reintroduce a legacy or unsafe publishing path", async () => {
   const workflow = await fs.readFile(WORKFLOW_PATH, "utf8");
-  // Exclude the safety-scan step itself, whose grep denylist legitimately names these blocked patterns as text.
   const operationalWorkflow = workflow
     .split("\n")
     .filter((line) => !/name: Validate workflow safety|blocked=.*grep -E/.test(line))
@@ -53,9 +66,46 @@ test("incremental-content-publish workflow does not reintroduce a legacy or unsa
   }
 });
 
+test("Incremental Content Publish is the sole automatically scheduled production publisher", async () => {
+  const scheduled: string[] = [];
+  const indirectDispatchers: string[] = [];
+
+  for (const file of await workflowFiles()) {
+    const source = executableLines(await fs.readFile(path.join(WORKFLOWS_DIR, file), "utf8"));
+    if (/^\s{2}schedule:\s*$/m.test(source)) {
+      scheduled.push(file);
+    }
+    if (/gh\s+workflow\s+run\s+(?:\.github\/workflows\/)?incremental-content-publish\.ya?ml\b/.test(source)) {
+      indirectDispatchers.push(file);
+    }
+  }
+
+  assert.deepEqual(
+    scheduled,
+    ["incremental-content-publish.yml"],
+    "exactly one workflow may contain an automatic schedule"
+  );
+  assert.deepEqual(
+    indirectDispatchers,
+    [],
+    "no secondary workflow may dispatch the production publisher"
+  );
+});
+
+test("Preview Publish is read-only and cannot mutate production Notion state", async () => {
+  const workflow = executableLines(
+    await fs.readFile(path.join(WORKFLOWS_DIR, "preview-publish.yml"), "utf8")
+  );
+
+  assert.match(workflow, /run: npm run build:readonly-validation/);
+  assert.doesNotMatch(workflow, /run: npm run assign-id\b/);
+  assert.doesNotMatch(workflow, /run: npm run ci:writeback\b/);
+  assert.doesNotMatch(workflow, /run: npm run writeback:/);
+  assert.doesNotMatch(workflow, /actions\/(?:configure-pages|upload-pages-artifact|deploy-pages)@/);
+});
+
 test("no temporary one-time hotfix workflow remains in the workflows directory", async () => {
-  const workflowsDir = path.resolve(process.cwd(), ".github/workflows");
-  const files = await fs.readdir(workflowsDir);
-  const suspicious = files.filter((file) => /one-time|onetime|temp-hotfix|hotfix-patch/i.test(file));
+  const files = await workflowFiles();
+  const suspicious = files.filter((file) => /one-time|onetime|once|temp|hotfix|dispatch-production/i.test(file));
   assert.deepEqual(suspicious, []);
 });
