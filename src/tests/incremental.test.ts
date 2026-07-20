@@ -395,6 +395,7 @@ test("incremental content publish workflow is scheduled exactly once daily, guar
   );
 
   assert.ok(workflow.includes("workflow_dispatch:"));
+  assert.ok(workflow.includes("  workflow_dispatch:\n  issue_comment:"), "manual dispatch must expose no inputs");
   assert.ok(!workflow.includes("push:"));
   assert.ok(!workflow.includes("pull_request:"));
   assert.ok(workflow.includes("schedule:"));
@@ -402,16 +403,11 @@ test("incremental content publish workflow is scheduled exactly once daily, guar
   assert.equal(cronLines.length, 1, "exactly one cron schedule is permitted");
   assert.equal(cronLines[0]![1], "0 9 * * *", "the single daily production schedule must run at the documented UTC time");
   assert.ok(workflow.includes("github.event_name == 'schedule'"), "the job guard must explicitly permit schedule events");
-  assert.ok(
-    /elif \[ "\$GITHUB_EVENT_NAME" = "schedule" \];\s*then\s*[\s\S]*?mode="apply"/.test(workflow),
-    "scheduled runs must resolve to the real apply path, not dry-run"
-  );
-  assert.ok(workflow.includes("confirm_production"));
+  assert.ok(workflow.includes('echo "mode=apply" >> "$GITHUB_OUTPUT"'), "all approved production triggers must resolve to apply");
+  assert.ok(!workflow.includes("confirm_production"));
+  assert.ok(!workflow.includes("DISPATCH_MODE"));
+  assert.ok(!workflow.includes("DISPATCH_CONFIRMATION"));
   assert.ok(workflow.includes("PHASE2-INCREMENTAL-PUBLISH"));
-  assert.ok(
-    workflow.includes('[ "$mode" = "apply" ] && [ "$DISPATCH_CONFIRMATION" != "PHASE2-INCREMENTAL-PUBLISH" ]'),
-    "manual workflow_dispatch apply must still require the exact confirmation phrase"
-  );
   assert.ok(
     workflow.includes("github.event.issue.number == 44") &&
       workflow.includes("github.actor == 'enxpower'") &&
