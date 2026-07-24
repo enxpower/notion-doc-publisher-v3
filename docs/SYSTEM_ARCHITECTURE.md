@@ -207,6 +207,28 @@ repositories — this is signed-repository trust, not immutable package pinning,
 realistically improvable without vendoring fonts or building a custom runner image, which is
 out of scope here. No custom or unsigned APT source is added anywhere.
 
+## Phase 3 Prompt 6: Performance Baseline and Bounded Concurrency (Additive, Locally Benchmarked)
+
+Full detail, historical measurements, the local synthetic benchmark, and the optimization
+decision table live in `docs/PHASE3_PERFORMANCE_BASELINE.md`. Summary:
+
+- `src/cli/shared.ts`'s `loadDocuments()` now fetches each document's Notion blocks with a
+  conservative, bounded concurrency (default 4, override via the validated, fail-closed-to-default
+  `NOTION_FETCH_CONCURRENCY` environment variable — see `src/util/concurrency.ts`). Output order,
+  per-document error attribution, and existing retry/rate-limit handling (centralized in
+  `NotionClient.request()`) are unchanged. The production workflow does not set this variable, so
+  the code default applies automatically once merged.
+- `src/routing/lifecycle-reconciliation.ts`'s NOOP reconciliation now checks all in-memory
+  eligibility preconditions (state/hash/URL-boundary agreement) before ever calling Notion's
+  `readLifecycleStatus`, eliminating that read entirely for structurally ineligible records.
+  Eligibility, mutation content, and mutation ordering are unchanged.
+- A real, measured, higher-value finding — the production `plan:incremental` and
+  `publish:incremental` steps each independently re-fetch the full Notion document set — was
+  identified but deliberately **not** fixed in this pass, because doing so safely requires
+  restructuring the plan→apply CLI/workflow boundary, which is out of scope for "bounded,
+  low-risk" optimization. See the performance-baseline document for the full decision table.
+- None of this is production-proven yet; it is locally benchmarked and structurally tested only.
+
 ## Architecture Drift Risks
 
 Watch for:

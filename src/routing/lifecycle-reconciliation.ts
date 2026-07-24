@@ -25,6 +25,12 @@ export type ReconciliationDecision =
   | { eligible: true; state: DocumentStateRecord }
   | { eligible: false; reason: ReconciliationSkipReason };
 
+export type PreconditionSkipReason = Exclude<ReconciliationSkipReason, "NOTION_STATUS_NOT_STALE">;
+
+export type PreconditionResult =
+  | { eligible: true; state: DocumentStateRecord }
+  | { eligible: false; reason: PreconditionSkipReason };
+
 export type ReconciliationPayload = {
   status: "success";
   message: string;
@@ -70,7 +76,33 @@ export function evaluateNoopReconciliation(input: {
   nextState?: DocumentStateRecord;
   notionStatus: NotionLifecycleSnapshot;
 }): ReconciliationDecision {
-  const { planRecord, previousState, nextState, notionStatus } = input;
+  const preconditions = evaluateNoopReconciliationPreconditions(input);
+  if (!preconditions.eligible) {
+    return preconditions;
+  }
+  if (normalizeStatus(input.notionStatus.buildStatus) !== "failed") {
+    return { eligible: false, reason: "NOTION_STATUS_NOT_STALE" };
+  }
+  return { eligible: true, state: preconditions.state };
+}
+
+/**
+ * Phase 3 Prompt 6: every check that does NOT require contacting Notion,
+ * split out so the orchestrator can skip the Notion `readLifecycleStatus`
+ * API call entirely for records that are already structurally ineligible
+ * (missing/mismatched private state, hash disagreement, missing or
+ * out-of-boundary URL). This changes nothing about eligibility — the
+ * combination of this function followed by the Notion status check is
+ * exactly equivalent to `evaluateNoopReconciliation` — it only changes
+ * *when* the Notion read happens, avoiding it entirely when the answer
+ * would be "not eligible" regardless of the Notion status.
+ */
+export function evaluateNoopReconciliationPreconditions(input: {
+  planRecord: IncrementalPlanRecord;
+  previousState?: DocumentStateRecord;
+  nextState?: DocumentStateRecord;
+}): PreconditionResult {
+  const { planRecord, previousState, nextState } = input;
 
   if (planRecord.action !== "NOOP") {
     return { eligible: false, reason: "NOT_NOOP" };
@@ -93,9 +125,6 @@ export function evaluateNoopReconciliation(input: {
   }
   if (!urlMatchesRouteBoundary(nextState)) {
     return { eligible: false, reason: "URL_ROUTE_BOUNDARY_MISMATCH" };
-  }
-  if (normalizeStatus(notionStatus.buildStatus) !== "failed") {
-    return { eligible: false, reason: "NOTION_STATUS_NOT_STALE" };
   }
   return { eligible: true, state: nextState };
 }
@@ -124,6 +153,14 @@ export function buildReconciliationPayload(state: DocumentStateRecord, runId: st
  * are untouched here and continue through their existing writeback path.
  * A rejected write is never swallowed — it propagates to the caller, which is
  * the same fail-closed behavior already used by the primary writeback loop.
+ *
+ * Phase 3 Prompt 6: all in-memory eligibility preconditions are checked
+ * before any Notion API call. A structurally ineligible NOOP record (missing
+ * or mismatched private state, hash disagreement, missing/out-of-boundary
+ * URL) costs zero `readLifecycleStatus` calls. Only a record that passes
+ * every precondition triggers exactly one Notion read, and a mutation is
+ * still written only when that read shows a stale `"failed"` status —
+ * mutation eligibility and ordering are unchanged from before this prompt.
  */
 export async function runNoopLifecycleReconciliation(input: {
   planRecords: IncrementalPlanRecord[];
@@ -137,17 +174,19 @@ export async function runNoopLifecycleReconciliation(input: {
     if (planRecord.action !== "NOOP") {
       continue;
     }
-    const notionStatus = await input.writeback.readLifecycleStatus(planRecord.pageId);
-    const decision = evaluateNoopReconciliation({
+    const preconditions = evaluateNoopReconciliationPreconditions({
       planRecord,
       previousState: input.previousByDocId.get(planRecord.docId),
-      nextState: input.nextByDocId.get(planRecord.docId),
-      notionStatus
+      nextState: input.nextByDocId.get(planRecord.docId)
     });
-    if (!decision.eligible) {
+    if (!preconditions.eligible) {
       continue;
     }
-    const payload = buildReconciliationPayload(decision.state, input.runId);
+    const notionStatus = await input.writeback.readLifecycleStatus(planRecord.pageId);
+    if (normalizeStatus(notionStatus.buildStatus) !== "failed") {
+      continue;
+    }
+    const payload = buildReconciliationPayload(preconditions.state, input.runId);
     await input.writeback.reconcileLifecycleStatus({
       pageId: planRecord.pageId,
       publishedUrl: payload.publishedUrl,

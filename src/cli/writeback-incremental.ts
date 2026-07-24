@@ -5,7 +5,7 @@ import { runCli, UserFacingError } from "../config.js";
 import { NotionWriteback } from "../notion/writeback.js";
 import { enableNotionMutationAllowList } from "../notion/read-only-guard.js";
 import type { IncrementalPlan, IncrementalPlanRecord, IncrementalStateManifest, LifecycleAction } from "../routing/incremental.js";
-import { runNoopLifecycleReconciliation } from "../routing/lifecycle-reconciliation.js";
+import { runNoopLifecycleReconciliation, type ReconciliationWritebackClient } from "../routing/lifecycle-reconciliation.js";
 import { loadBrandRoutes } from "../routing/routes.js";
 import { loadRoutedReadonlyConfigFromEnvironment } from "../routing/routed-readonly.js";
 
@@ -50,6 +50,12 @@ await runCli(async () => {
 
   const updates: Array<{ action: LifecycleAction; brand: string; docId: string; status: string; message: string }> = [];
   let reconciled: Awaited<ReturnType<typeof runNoopLifecycleReconciliation>> = [];
+  // Phase 3 Prompt 6: aggregate-only observability. No document content, page
+  // title, URL, or secret value is ever included — only counts and elapsed
+  // milliseconds, safe to surface in the GitHub Step Summary and Issue #44 report.
+  let reconciliationReadCount = 0;
+  const noopCandidateCount = plan.records.filter((record) => record.action === "NOOP").length;
+  const updatesStartedAt = Date.now();
   const restoreMutationAllowList = enableNotionMutationAllowList(
     "incremental-post-deployment-writeback",
     ["updateLifecycleResult", "reconcileLifecycleStatus"]
@@ -90,16 +96,27 @@ await runCli(async () => {
     // BUILD_STATUS ("failed") for a NOOP record whose private state is
     // verified known-good, without touching routing, hashes, DOC_ID, or
     // Share Token. See docs/SYSTEM_ARCHITECTURE.md for the defect this closes.
+    // The read-counting wrapper only counts calls; it changes no behavior —
+    // reconciliation eligibility, ordering, and mutation semantics are
+    // identical to calling runNoopLifecycleReconciliation with `writeback` directly.
+    const countingWriteback: ReconciliationWritebackClient = {
+      readLifecycleStatus: async (pageId) => {
+        reconciliationReadCount += 1;
+        return writeback.readLifecycleStatus(pageId);
+      },
+      reconcileLifecycleStatus: (update) => writeback.reconcileLifecycleStatus(update)
+    };
     reconciled = await runNoopLifecycleReconciliation({
       planRecords: plan.records,
       previousByDocId,
       nextByDocId,
-      writeback,
+      writeback: countingWriteback,
       runId
     });
   } finally {
     restoreMutationAllowList();
   }
+  const updatesElapsedMs = Date.now() - updatesStartedAt;
 
   const summary = {
     schema: "notion-doc-publisher-v3/incremental-writeback-result",
@@ -109,13 +126,25 @@ await runCli(async () => {
     mutationCount: updates.length + reconciled.length,
     updates,
     reconciledCount: reconciled.length,
-    reconciled
+    reconciled,
+    // Aggregate-only performance observability (Phase 3 Prompt 6): counts and
+    // timing only, never document content, titles, URLs, or secret values.
+    observability: {
+      noopCandidateCount,
+      reconciliationReadCount,
+      reconciliationMutationCount: reconciled.length,
+      writebackElapsedMs: updatesElapsedMs
+    }
   };
   await fs.mkdir(path.dirname(outputPath), { recursive: true });
   await fs.writeFile(outputPath, `${JSON.stringify(summary, null, 2)}\n`, "utf8");
   console.log(
     `Incremental post-deployment writeback completed with ${updates.length} Notion mutations ` +
       `and ${reconciled.length} stale-status reconciliations.`
+  );
+  console.log(
+    `Reconciliation observability: noopCandidates=${noopCandidateCount}, ` +
+      `reads=${reconciliationReadCount}, mutations=${reconciled.length}, elapsedMs=${updatesElapsedMs}.`
   );
   console.log(`Writeback: ${path.relative(process.cwd(), outputPath)}`);
 });

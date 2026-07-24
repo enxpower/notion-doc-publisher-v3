@@ -2,6 +2,18 @@
 
 This document defines how notion-doc-publisher-v3 moves from governance setup to ongoing delivery.
 
+## Numbering Clarification (Phase 3 Prompt 6 note)
+
+This document's "Phase 0" through "Phase 5" below is a **separate, legacy governance-bootstrap
+numbering**, distinct from the operational Phase 1 / Phase 2 / Phase 3 numbering used in
+`docs/PHASE2_BASELINE.md`, `docs/PHASE2_FINAL_PRODUCTION_SEAL.md`, and the current governed
+Phase 3 prompt sequence (`docs/PROJECT_CONTEXT.md`, `docs/SYSTEM_ARCHITECTURE.md`). The two
+numbering schemes do not align one-to-one and predate the current governance model; this
+document's "Current Phase" section below (written when only Phase 1 was sealed) has not been
+updated since. For the authoritative current phase status, read `docs/PHASE2_BASELINE.md` and
+`docs/PROJECT_CONTEXT.md` — not the phase numbers in this file. This note is added only to
+prevent confusion; the rest of this document is left as historical record and not rewritten.
+
 ## Lifecycle Principles
 
 Every phase must preserve:

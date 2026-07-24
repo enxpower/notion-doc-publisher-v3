@@ -3,21 +3,39 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import type { AppConfig } from "../config.js";
 import { VALID_PRIVATE_LINK_NAMESPACES, normalizeVisibility, isPrivateLinkVisibility } from "../model/document.js";
-import { NotionClient, type NotionBlock } from "../notion/client.js";
+import { NotionClient, type NotionBlock, type NotionPage } from "../notion/client.js";
 import { computeCanonicalPath, inferPortalCategory, inferPrivateLinkNamespace, pageToDocument } from "../notion/properties.js";
 import { NotionWriteback } from "../notion/writeback.js";
 import type { BuildReport, DocumentModel } from "../model/document.js";
 import { collectIssues, isPublishableCandidate, validateDocuments } from "../validate/validate.js";
+import { mapWithConcurrency, resolveConcurrency } from "../util/concurrency.js";
 
+/**
+ * Loads every document's page metadata and blocks from Notion.
+ *
+ * Phase 3 Prompt 6: per-document block fetches are independent (each page's
+ * blocks belong only to that page) and are now fetched with a conservative,
+ * bounded concurrency (default 4, override via NOTION_FETCH_CONCURRENCY,
+ * validated and fail-closed to the default — see src/util/concurrency.ts).
+ * Output order always matches the order Notion returned pages in, regardless
+ * of fetch completion order. Nested block traversal (e.g. table rows) within
+ * a single page remains serial. A single page's fetch failure still fails
+ * the whole load, now reporting which page failed.
+ */
 export async function loadDocuments(config: AppConfig): Promise<DocumentModel[]> {
   const client = new NotionClient(config);
   const pages = await client.queryDatabase();
-  const documents: DocumentModel[] = [];
-  for (const page of pages) {
-    const blocks = await fetchPageBlocks(client, page.id);
-    documents.push(pageToDocument(page, blocks, config));
-  }
-  return documents;
+  const concurrency = resolveConcurrency(process.env.NOTION_FETCH_CONCURRENCY);
+  return mapWithConcurrency(pages, concurrency, async (page: NotionPage) => {
+    let blocks: NotionBlock[];
+    try {
+      blocks = await fetchPageBlocks(client, page.id);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`Failed to load Notion page ${page.id}: ${message}`);
+    }
+    return pageToDocument(page, blocks, config);
+  });
 }
 
 export async function fetchPageBlocks(client: NotionClient, pageId: string): Promise<NotionBlock[]> {
