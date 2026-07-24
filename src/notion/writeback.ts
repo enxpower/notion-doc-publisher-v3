@@ -72,6 +72,43 @@ export class NotionWriteback {
     return readPublishedUrl(page.properties.PUBLISHED_URL);
   }
 
+  /**
+   * Read-only lookup of the current Notion BUILD_STATUS for a single page.
+   * Used only to decide whether a NOOP record's lifecycle status is stale;
+   * never used to authorize rendering, deployment, or identity changes.
+   */
+  async readLifecycleStatus(pageId: string): Promise<{ buildStatus: string }> {
+    const page = await this.client.retrievePage(pageId);
+    return { buildStatus: readSelectStatus(page.properties.BUILD_STATUS) };
+  }
+
+  /**
+   * Narrow, allow-listed correction for a NOOP record whose private state is
+   * verified known-good but whose Notion lifecycle status is stale. Writes
+   * only the lifecycle fields already covered by REQUIRED_WRITEBACK_FIELDS,
+   * using an explicit preserved publishedAt rather than the current time.
+   */
+  async reconcileLifecycleStatus(update: {
+    pageId: string;
+    publishedUrl: string;
+    publishedAt: string;
+    runId: string;
+    message: string;
+  }): Promise<void> {
+    assertNotionMutationAllowed("reconcileLifecycleStatus");
+    await this.client.updatePageProperties(
+      update.pageId,
+      {
+        BUILD_STATUS: { select: { name: "success" } },
+        BUILD_MESSAGE: richText(update.message),
+        LAST_BUILD_RUN: richText(update.runId),
+        PUBLISHED_URL: { url: update.publishedUrl },
+        PUBLISHED_AT: { date: { start: update.publishedAt } }
+      },
+      "reconcileLifecycleStatus"
+    );
+  }
+
   async updateDocumentSkipped(pageId: string, message: string, runId: string): Promise<void> {
     assertNotionMutationAllowed("updateDocumentSkipped");
     await this.updateStatus(pageId, "skipped", message, runId);
@@ -123,6 +160,17 @@ function readPublishedUrl(property: unknown): string {
     return "";
   }
   return value.url.trim();
+}
+
+function readSelectStatus(property: unknown): string {
+  if (!property || typeof property !== "object" || Array.isArray(property)) {
+    return "";
+  }
+  const value = property as { type?: unknown; select?: { name?: unknown } | null };
+  if (value.type !== "select" || !value.select) {
+    return "";
+  }
+  return typeof value.select.name === "string" ? value.select.name.trim() : "";
 }
 
 export function assertWritebackSchema(database: NotionDatabase): void {

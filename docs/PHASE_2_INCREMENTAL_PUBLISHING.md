@@ -20,7 +20,17 @@ writeback step:
 | `FILTERED` | The document is outside the current workflow filter and has no required removal action. |
 
 `NOOP` records are not render candidates, do not regenerate PDFs, do not deploy
-their brand, and do not mutate Notion.
+their brand, and do not mutate Notion during the primary lifecycle writeback pass.
+
+> **Phase 3 addendum (does not alter this Phase 2 record):** a separate, narrow,
+> additive reconciliation pass (`src/routing/lifecycle-reconciliation.ts`) may issue
+> exactly one corrective Notion write for a `NOOP` record whose private state is
+> verified known-good but whose Notion `BUILD_STATUS` is stale (`"failed"`). This is
+> not part of `NOOP` classification and does not add rendering, deployment, or any
+> other mutation to `NOOP`. See `docs/SYSTEM_ARCHITECTURE.md` for full detail. This
+> addendum is implemented and locally tested on an unmerged Phase 3 branch; it does
+> not change any Phase 2 sealed production evidence recorded elsewhere in this file
+> or in `docs/PHASE2_BASELINE.md`.
 
 ## Manifest Model
 

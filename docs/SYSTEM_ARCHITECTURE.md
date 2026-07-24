@@ -91,25 +91,50 @@ A brand being structurally configured never grants deployment outside its own bo
 workflow's path-boundary validation step fails closed if a change outside the allowed pattern
 is detected for any target repository.
 
-## Known Phase 3 Reliability Gap (Not Corrected In This Prompt)
+## Phase 3 Lifecycle Reconciliation (Implemented, Not Yet Production-Proven)
 
 Lifecycle classification (`src/routing/incremental.ts`) compares only content/routing/
 renderer/asset hashes against the private state manifest; it does not read Notion's current
-`BUILD_STATUS` (or other displayed lifecycle fields). Both the incremental-apply writeback
-path and the `writeback:incremental` CLI unconditionally skip Notion mutation whenever a
-record classifies as `NOOP` or `FILTERED`. Consequence: a document that is live, verified,
-and correctly persisted in private state can continue to display a stale Notion lifecycle
-status (for example, a transient prior failure, or a status written by a manually dispatched
-Preview Publish run) indefinitely, because a NOOP classification never re-touches Notion and
-nothing else currently reconciles the two.
+`BUILD_STATUS` as part of classification, and a record still classifies as `NOOP` purely by
+hash agreement. Historically, this meant a document that was live, verified, and correctly
+persisted in private state could continue to display a stale Notion lifecycle status (for
+example, a transient prior failure, or a status written by a manually dispatched Preview
+Publish run) indefinitely, because a `NOOP` classification never re-touched Notion.
 
-This is recorded here as a **known, not-yet-corrected** reliability gap:
-- It does not violate the live-verification -> private-state-persistence -> Notion-writeback
-  ordering above; it is a separate gap in what NOOP does *not* do.
-- It is scheduled for explicit design/containment treatment in a later Phase 3 prompt.
-- Recording it here is not authorization to alter NOOP's render/deploy/writeback-skip
-  behavior, the hash-based classifier, or any other runtime behavior in this documentation
-  prompt.
+Phase 3 adds a narrow, additive reconciliation step for this specific gap, implemented in
+`src/routing/lifecycle-reconciliation.ts` and wired into the existing
+`npm run writeback:incremental` step (`src/cli/writeback-incremental.ts`) — no new workflow
+step, schedule, or production trigger was added. For each `NOOP` record only:
+
+1. The current Notion `BUILD_STATUS` is read (a new read-only lookup,
+   `NotionWriteback.readLifecycleStatus`).
+2. Reconciliation proceeds only when the private state on both sides of the run (pre-run and
+   post-persistence) agrees with itself and with the freshly recomputed desired-state hashes
+   for that document, and a known deployed URL exists. Any missing or inconsistent evidence
+   fails closed with zero mutation.
+3. Reconciliation triggers only when Notion's `BUILD_STATUS` is exactly `"failed"` — the
+   narrowest, primary defect case. Deliberately **not** implemented: reconciling a missing
+   status or a `PUBLISHED_URL` mismatch; these were considered and intentionally deferred
+   pending explicit owner/governance decision, per the instruction not to expand eligibility
+   beyond what is currently governed and tested.
+4. The corrective write (`NotionWriteback.reconcileLifecycleStatus`, gated by the same
+   allow-list mechanism as all other lifecycle writes) sets `BUILD_STATUS` to `success` with
+   an explicit message stating the metadata was reconciled from already-verified state, sets
+   `PUBLISHED_URL` from the verified private state, and preserves the verified state's
+   existing `publishedAt` — it never stamps the current time as a new publication event.
+5. `CREATE`/`UPDATE`/`MOVE`/`REMOVE`/`INVALID`/`FILTERED` records are entirely unaffected;
+   only `NOOP` is eligible. No render, deployment, DOC_ID, or Share Token mutation occurs as
+   part of reconciliation, and Preview Publish cannot reach this code path (it never calls
+   `writeback:incremental`).
+
+This addition does not violate the live-verification -> private-state-persistence ->
+Notion-writeback ordering above; reconciliation runs inside the same post-persistence
+writeback step, after that ordering has already been satisfied for the run.
+
+**Status**: implemented and covered by local regression tests (see
+`src/tests/lifecycle-reconciliation.test.ts`) on an unmerged Phase 3 branch. It has not yet
+been exercised against real production Notion data or a real production run, and must not be
+described as production-proven until such evidence exists.
 
 ## Architecture Drift Risks
 
