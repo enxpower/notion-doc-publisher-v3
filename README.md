@@ -125,8 +125,14 @@ A true NOOP performs:
 - zero PDF generation;
 - zero brand deployment;
 - zero copied or deleted files;
-- zero Notion mutations;
+- zero Notion mutations from lifecycle classification itself;
 - no meaningless private-state rewrite.
+
+Phase 3 adds one narrow exception: a separate reconciliation pass may issue a single
+corrective Notion write for a NOOP record whose private state is verified known-good
+but whose Notion `BUILD_STATUS` is stale (`"failed"`). This never renders, deploys, or
+rewrites private state — see `docs/SYSTEM_ARCHITECTURE.md` for detail. It is
+implemented and locally tested on an unmerged Phase 3 branch, not yet production-run.
 
 ### REMOVE behavior
 

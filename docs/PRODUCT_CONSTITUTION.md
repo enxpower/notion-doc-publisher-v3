@@ -2,6 +2,14 @@
 
 This is the highest-level product rulebook for notion-doc-publisher-v3.
 
+## Authority Note
+
+Phase 2 final production sealing (`docs/PHASE2_FINAL_PRODUCTION_SEAL.md`) superseded this
+document's earlier preview-only product identity. Where this document once described the
+project as a preview/test pipeline only, that description is obsolete and is corrected below.
+The constitutional constraints on secret safety, identifier stability, and fail-closed
+behavior are unchanged and remain in force at full strength.
+
 ## Supreme Rule
 
 Every engineering and content decision must be judged by:
@@ -15,13 +23,22 @@ If the answer is no, do not build it.
 notion-doc-publisher-v3 is:
 
 - A clean, testable, multi-brand Notion-to-static-HTML document publisher.
-- A preview and test publishing pipeline, not a production system.
-- A DOC_ID assignment and tracking system tied to Notion.
+- A governed production document publishing system with structurally separated preview and
+  production pathways. Production deployment is fail-closed: any failure in validation,
+  rendering, deployment, or live verification preserves the previous successful published
+  output rather than replacing it.
+- A DOC_ID and Share Token assignment and tracking system tied to Notion, with stable
+  identifiers, published URLs, brand routing, and lifecycle state protected from
+  unauthorized or incidental change.
 
 notion-doc-publisher-v3 is not:
 
-- A production publishing system for live company documentation sites (that is V2).
-- A Notion editor or CMS.
+- An unrestricted general-purpose website builder. Production publishing is limited to the
+  documents, brands, and routes explicitly configured in `config/brands.json` and
+  `config/brand-routes.json`, deployed only through the single expressly authorized
+  production workflow.
+- A Notion editor or CMS. Notion remains the only governed source of publishing records;
+  this system renders and deploys, it never becomes a second editing surface.
 - A general-purpose static site generator.
 
 ## Core Value Principle
@@ -88,11 +105,17 @@ Before release or publication, work must pass:
 
 Reject work that:
 
-- Changes output paths or DOC_IDs without explicit approval.
-- Adds Notion API writes outside of assign-id and writeback commands.
+- Changes output paths, DOC_IDs, or Share Tokens without explicit approval, or rotates/
+  reassigns an existing identifier as a side effect of unrelated work.
+- Adds Notion API writes outside the expressly authorized commands and allow-listed
+  properties (`assign-id`, the writeback commands, and the production identity
+  initialization step that fills only missing DOC_ID/Share Token values before a
+  production apply run).
 - Mixes brand or VI assets between companies.
 - Exposes secrets or internal tokens in built output.
-- Deploys to production documentation sites without explicit owner approval.
+- Introduces a second automatic production publisher, a second production schedule, or any
+  deployment path to a production destination other than the single expressly authorized
+  production workflow.
 
 ## Priority Order
 

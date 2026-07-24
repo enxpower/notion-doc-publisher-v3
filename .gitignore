@@ -3,3 +3,7 @@ node_modules/
 dist/
 pdf-output/
 .env
+
+# Local Serena MCP coding-assistant project index/cache. Not project content;
+# has recurred as untracked cruft across the Phase 3 prompt sequence.
+.serena/

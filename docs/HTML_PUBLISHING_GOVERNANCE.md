@@ -4,27 +4,43 @@ Use this document for all HTML output, static publishing, document pages, and th
 
 This is a governance layer. Project-specific changes must preserve the core rules unless the owner explicitly approves an exception.
 
+## Authority Note
+
+Phase 2 final production sealing (`docs/PHASE2_FINAL_PRODUCTION_SEAL.md`) superseded this
+document's earlier description of this repository as preview/test only for ARCBOS, and
+superseded the earlier `docs-arcbos-v2` production reference below. The corrected routing
+table reflects verified current production ownership.
+
 ## Repository Routing Rule
 
-This repository (`notion-doc-publisher-v3`) is a **preview/test publisher only**.
+This repository (`notion-doc-publisher-v3`) is the **sole automatic production publisher**
+for ARCBOS, ENERGIZE, AGIM, and GONG, through the single expressly authorized workflow
+(`incremental-content-publish.yml`). It is also, separately, its own preview/QA target via
+`preview-publish.yml`, which is structurally read-only with respect to production: it has no
+deploy steps and never calls a production Notion writeback command.
 
-Do not publish to or deploy from this repository to production documentation sites.
+Do not deploy to a production destination through any path other than the single expressly
+authorized production workflow. A brand being configured never permits deployment outside
+its own route boundary (see per-brand boundaries below) — deployment boundaries are
+per-brand and enforced by a fail-closed path check.
 
-Production company documentation repositories:
+Current verified production routing:
+
+| Brand | Domain / Root | Production deployment | Target repository | Path boundary |
+|---|---|---|---|---|
+| ARCBOS | `docs.arcbos.com` | GitHub Pages artifact owned by this repository | `enxpower/notion-doc-publisher-v3` (self) | n/a — artifact is sanitized before upload |
+| ENERGIZE | `docs.energizeos.com` | Branch deployment | `enxpower/docs-energize-v2` | `clients/`, `internal/`, `pdf/`, `assets/` |
+| AGIM | `docs.agim.ca` | Branch deployment | `enxpower/agim-docs` | `clients/`, `internal/`, `pdf/`, `assets/`; existing portal/VI/root files preserved |
+| GONG | `enxpower.com/gong-docs/` | Branch deployment | `enxpower/pub` | `gong-docs/**` only; `gong-vi/**`, repository root pages, `CNAME`, and unrelated project folders must never be modified |
+
+Preview/QA target for this repository (never a production destination):
 
 | Scope | Repository | Publish URL |
 |---|---|---|
-| EnergizeOS | `enxpower/docs-energize-v2` | `docs.energizeos.com` |
-| ARCBOS | `enxpower/docs-arcbos-v2` | `docs.arcbos.com` |
-| AGI&M | `enxpower/agim-docs` | `docs.agim.ca` |
+| Preview/QA | `enxpower/notion-doc-publisher-v3` | `https://enxpower.github.io/notion-doc-publisher-v3` |
 
-Preview/test target for this repository:
-
-| Scope | Repository | Publish URL |
-|---|---|---|
-| Preview/test | `enxpower/notion-doc-publisher-v3` | `https://enxpower.github.io/notion-doc-publisher-v3` |
-
-Never deploy preview output to a production documentation repository.
+Never deploy preview/QA output to any production destination above, and never let a
+preview/QA run mutate production Notion lifecycle fields.
 
 ## Publication Structure Rule
 
