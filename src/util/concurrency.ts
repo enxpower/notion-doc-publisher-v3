@@ -11,10 +11,19 @@ export const MAX_CONCURRENCY = 8;
 
 /**
  * Parses a concurrency override from an environment-style string value.
- * Any missing, empty, non-integer, or out-of-range value fails closed to
- * `fallback` (the safe default) rather than throwing — concurrency is a
- * performance knob, not a correctness-affecting configuration, so invalid
- * input must never block a run.
+ *
+ * Terminology note (Phase 3 Prompt 7 final audit): this deliberately reverts
+ * any missing, empty, non-integer, or out-of-range value to `fallback` (the
+ * conservative default) rather than throwing. This is intentionally
+ * different from this repository's "fail closed" convention used elsewhere
+ * for correctness- and security-affecting configuration (e.g. a missing
+ * BRAND_TOKENS_JSON, an unconfirmed target repository, or a DOC_ID
+ * collision, all of which *stop* the run). Concurrency is a pure performance
+ * knob with no effect on output correctness, routing, identity, or deploy
+ * boundaries — reverting to a known-safe default on invalid input is the
+ * correct choice here specifically because blocking an entire production run
+ * over a malformed tuning value would itself be a worse outcome than simply
+ * using the safe default.
  */
 export function resolveConcurrency(rawValue: string | undefined, fallback: number = DEFAULT_CONCURRENCY): number {
   const trimmed = rawValue?.trim();

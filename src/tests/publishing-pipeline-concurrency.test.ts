@@ -41,7 +41,7 @@ test("default concurrency is conservative (4) and within the documented safe bou
   assert.equal(resolveConcurrency("   "), DEFAULT_CONCURRENCY);
 });
 
-test("invalid concurrency override values fail closed to the safe default", () => {
+test("invalid concurrency override values revert to the safe default (a performance-only knob, not a correctness/security fail-closed control)", () => {
   for (const invalid of ["abc", "0", "-1", "2.5", String(MAX_CONCURRENCY + 1), "NaN", "Infinity"]) {
     assert.equal(resolveConcurrency(invalid), DEFAULT_CONCURRENCY, invalid);
   }

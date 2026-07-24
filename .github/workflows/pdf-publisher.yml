@@ -45,6 +45,18 @@ jobs:
         with:
           ref: ${{ inputs.branch }}
 
+      # Phase 3 Prompt 7: live Notion writeback (a secret-bearing mutation) is
+      # only permitted when running the trusted, reviewed code on `main`. A
+      # dispatcher-supplied non-main branch may still run this workflow for
+      # read-only PDF export/testing, but can never enable a live Notion write
+      # — closing the one arbitrary-branch + secret-bearing-write combination
+      # this workflow could otherwise reach.
+      - name: Enforce trusted ref for live Notion writeback
+        if: ${{ inputs.writeback == true && inputs.branch != 'main' }}
+        run: |
+          echo "Live Notion writeback (writeback=true) is only permitted when inputs.branch is 'main'. Refusing to run with branch '${{ inputs.branch }}'." >&2
+          exit 1
+
       - name: Setup Node
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:

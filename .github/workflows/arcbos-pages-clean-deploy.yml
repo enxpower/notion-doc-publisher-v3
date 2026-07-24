@@ -10,7 +10,11 @@ permissions:
   id-token: write
 
 concurrency:
-  group: github-pages
+  # Phase 3 Prompt 7: shares the production publisher's concurrency group so
+  # GitHub Actions serializes manual disaster-recovery Pages deployment
+  # against the automatic production publisher — the two can never run their
+  # jobs concurrently and race for the same ARCBOS Pages deployment target.
+  group: incremental-content-publish
   cancel-in-progress: false
 
 jobs:
