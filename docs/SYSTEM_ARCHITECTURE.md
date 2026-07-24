@@ -91,6 +91,20 @@ A brand being structurally configured never grants deployment outside its own bo
 workflow's path-boundary validation step fails closed if a change outside the allowed pattern
 is detected for any target repository.
 
+**Phase 3 Prompt 4 boundary hardening** (`src/tests/four-brand-boundary-hardening.test.ts`)
+independently proves, rather than assumes, these boundaries: the canonical four-brand set
+fails closed against a fifth or missing brand at config-load time; the production workflow's
+`BRAND_TOKENS_JSON`, per-brand deploy-key usage, and GONG's `^gong-docs/` path-boundary regex
+are cross-checked against `config/brand-routes.json` so the two cannot silently drift; ARCBOS
+has no deploy key and no branch-checkout step; GONG deletion planning
+(`deletionPlanForRecord`) rejects sibling-prefix confusion (`gong-docs-archive/`,
+`gong-docs2/`, `gong-doc/`), traversal, absolute paths, and a corrupted previous-state record
+pointing at another brand; and ENERGIZE/AGIM's protected-path guard (no deployment-root
+prefix) independently blocks deletion of `CNAME`, `gong-vi/**`, and the shared root
+`index.html`. No production-code defect was found in this boundary logic; the hardening in
+this pass was tests only, except for one additive check in the Prompt 3 reconciliation path
+described immediately below.
+
 ## Phase 3 Lifecycle Reconciliation (Implemented, Not Yet Production-Proven)
 
 Lifecycle classification (`src/routing/incremental.ts`) compares only content/routing/
@@ -110,8 +124,12 @@ step, schedule, or production trigger was added. For each `NOOP` record only:
    `NotionWriteback.readLifecycleStatus`).
 2. Reconciliation proceeds only when the private state on both sides of the run (pre-run and
    post-persistence) agrees with itself and with the freshly recomputed desired-state hashes
-   for that document, and a known deployed URL exists. Any missing or inconsistent evidence
-   fails closed with zero mutation.
+   for that document, a known deployed URL exists, and that URL structurally falls within the
+   document's own recorded origin and path prefix (`URL_ROUTE_BOUNDARY_MISMATCH`, added in
+   Phase 3 Prompt 4 as an independent, non-hash-based check — defense against a private-state
+   record whose URL field drifted out of sync with its own hash fields, including across a
+   brand boundary such as a GONG record whose URL fell outside `/gong-docs/`). Any missing or
+   inconsistent evidence fails closed with zero mutation.
 3. Reconciliation triggers only when Notion's `BUILD_STATUS` is exactly `"failed"` — the
    narrowest, primary defect case. Deliberately **not** implemented: reconciling a missing
    status or a `PUBLISHED_URL` mismatch; these were considered and intentionally deferred

@@ -18,6 +18,7 @@ export type ReconciliationSkipReason =
   | "MISSING_DESIRED_STATE"
   | "IDENTITY_OR_HASH_MISMATCH"
   | "MISSING_PUBLIC_URL"
+  | "URL_ROUTE_BOUNDARY_MISMATCH"
   | "NOTION_STATUS_NOT_STALE";
 
 export type ReconciliationDecision =
@@ -56,9 +57,12 @@ export type ReconciliationOutcome = {
  * corrected. Eligibility requires the record to be NOOP, a complete matching
  * known-good private state entry on both sides of this run (previous and
  * post-persistence next state), identity/hash agreement with the freshly
- * computed desired state, a known deployed URL, and a Notion BUILD_STATUS of
- * exactly "failed" (the narrowest, primary intended defect case). Any missing
- * or inconsistent evidence fails closed with zero mutation.
+ * computed desired state, a known deployed URL that structurally falls within
+ * the document's own origin and path-prefix boundary (independent defense
+ * against a private-state record whose URL field drifted out of sync with its
+ * hash fields), and a Notion BUILD_STATUS of exactly "failed" (the narrowest,
+ * primary intended defect case). Any missing or inconsistent evidence fails
+ * closed with zero mutation.
  */
 export function evaluateNoopReconciliation(input: {
   planRecord: IncrementalPlanRecord;
@@ -86,6 +90,9 @@ export function evaluateNoopReconciliation(input: {
   }
   if (!nextState.finalUrl) {
     return { eligible: false, reason: "MISSING_PUBLIC_URL" };
+  }
+  if (!urlMatchesRouteBoundary(nextState)) {
+    return { eligible: false, reason: "URL_ROUTE_BOUNDARY_MISMATCH" };
   }
   if (normalizeStatus(notionStatus.buildStatus) !== "failed") {
     return { eligible: false, reason: "NOTION_STATUS_NOT_STALE" };
@@ -175,6 +182,19 @@ function statesMatch(a: DocumentStateRecord, b: DocumentStateRecord): boolean {
     a.assetHash === b.assetHash &&
     a.desiredStateHash === b.desiredStateHash
   );
+}
+
+/**
+ * Independent, non-hash-based confinement check: the verified state's public
+ * URL must structurally fall within that same record's own canonical origin
+ * and path prefix. This guards against a corrupted or manually edited private
+ * state record whose finalUrl no longer matches its own routing boundary,
+ * even if its hash fields were left untouched.
+ */
+function urlMatchesRouteBoundary(state: DocumentStateRecord): boolean {
+  const origin = state.canonicalOrigin.replace(/\/+$/, "");
+  const prefix = state.pathPrefix ? `/${state.pathPrefix.replace(/^\/+|\/+$/g, "")}` : "";
+  return state.finalUrl.startsWith(`${origin}${prefix}`);
 }
 
 function identityAndHashesMatch(

@@ -86,6 +86,8 @@ This section distinguishes three levels of evidence for each brand:
 Released and production-proven scope:
 - ARCBOS and ENERGIZE routed publishing are structurally configured, test-verified, and
   production-proven by cited run evidence in `docs/PHASE2_BASELINE.md`.
+- GONG routed publishing is structurally configured, test-verified, and **production-proven
+  by cited run, commit, and live-URL evidence** (verified in Phase 3 Prompt 4; see below).
 - One Notion database is retained.
 - HTML and PDF outputs are brand-isolated.
 - Published URL writeback is route-aware and idempotent.
@@ -95,16 +97,43 @@ Structurally configured and test-verified, not yet production-proven for documen
   (`repositoryConfirmed: true`) and the production workflow, and covered by passing
   regression tests. No cited production run currently shows AGIM document content deployed
   to `enxpower/agim-docs`; this is an open evidence gap, not a code-level block.
-- GONG is configured, test-verified, and production-enabled: `config/brand-routes.json`
-  marks `repositoryConfirmed: true` for GONG identically to the other three brands, the
-  production workflow treats GONG's `gong-docs/**`-scoped deployment identically to
-  ENERGIZE/AGIM (no skip guard exists), and regression tests assert GONG deploys like the
-  other brands. No repository-contained citation of an actual GONG document-content
-  production run currently exists — every cited production run ID in
-  `docs/PHASE2_BASELINE.md` reports GONG's target repository as unchanged, and only a
-  static GONG favicon asset has been live-verified. External operational evidence of a
-  live GONG document deployment may exist outside this repository; it is not asserted here
-  because it cannot be confirmed from repository evidence alone.
+
+### GONG production evidence (verified Phase 3 Prompt 4, evidence level: FULL PRODUCTION URL VERIFIED)
+
+Independently re-verified from repository- and GitHub-hosted evidence, not assumed from prior
+chat history:
+
+- Production run `29705771289` ("Incremental Content Publish", triggered via the Issue #44
+  owner-command channel, conclusion `success`) reported, via its own posted Issue #44 comment
+  (`issuecomment-5017591905`): lifecycle counts `{"FILTERED":37,"NOOP":18,"UPDATE":1}`, one
+  document rendered and one PDF generated, one brand deployed, six files copied, one live
+  lifecycle record verified, one Notion mutation, and target commit
+  `GONG 1775af058704d5ce90e85632574ef13f6b601d4e`.
+- That exact commit is independently confirmed in `enxpower/pub`'s real commit history,
+  authored and committed by `github-actions[bot]` (the same identity the production workflow
+  configures for target-repository commits), touching exactly two files, both under
+  `gong-docs/**`: `gong-docs/clients/175e8db08a67f7d8/index.html` and
+  `gong-docs/pdf/GONG-MEM-2607-0032.pdf`.
+- `enxpower/pub`'s repository root (`CNAME`, `index.html`, `gong-vi/**`) has never been
+  modified by any `github-actions[bot]` "chore: publish incremental document updates" commit —
+  only by earlier manual setup commits — confirming the GONG deployment boundary held in
+  real production history, not only in local tests.
+- Live HTTP verification (read-only, performed during this audit): the deployed document page
+  at `https://enxpower.com/gong-docs/clients/175e8db08a67f7d8/` returns HTTP 200 with title
+  "SYSTEM TEST — GONG Client — GONG-MEM-2607-0032" and a correct relative GONG favicon
+  reference; its PDF at `https://enxpower.com/gong-docs/pdf/GONG-MEM-2607-0032.pdf` returns
+  HTTP 200, `application/pdf`. A second document, `https://enxpower.com/gong-docs/internal/512717050a45997b/`
+  (title "SYSTEM TEST — GONG Internal", DOC_ID `GONG-MEM-2607-0033`) and its PDF at
+  `https://enxpower.com/gong-docs/pdf/GONG-MEM-2607-0033.pdf` also both return live HTTP 200.
+  This resolves the DOC_ID `GONG-MEM-2607-0033` referenced in earlier historical notes: it is
+  now live, correctly GONG-branded, and confined to `/gong-docs/`.
+- This supersedes the earlier conservative "configured, test-verified, and production-enabled"
+  language for GONG. GONG document-content production deployment is no longer merely
+  structural — it is cited, commit-verified, and live-URL-verified.
+- A prior context note characterized workflow run `29701392671` as "an old failed run." Direct
+  inspection shows this run is actually a **`Preview Publish` run with conclusion `success`**,
+  unrelated to GONG's deployment history. That characterization is not corroborated by
+  repository evidence and should not be relied upon.
 
 No additional Phase 2 scope is accepted; new work belongs to Phase 3.
 
