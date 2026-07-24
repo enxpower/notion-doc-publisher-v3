@@ -27,9 +27,12 @@ test("incremental-content-publish workflow delegates ARCBOS artifact sanitation 
 
 test("incremental-content-publish workflow still deploys ARCBOS through the official Pages actions", async () => {
   const workflow = await fs.readFile(WORKFLOW_PATH, "utf8");
-  assert.match(workflow, /uses: actions\/configure-pages@v\d/);
-  assert.match(workflow, /uses: actions\/upload-pages-artifact@v\d/);
-  assert.match(workflow, /uses: actions\/deploy-pages@v\d/);
+  // Phase 3 Prompt 5 pins these to immutable commit SHAs with a version
+  // comment (see src/tests/supply-chain-hardening.test.ts for the full pin
+  // registry); this test only confirms the official actions are still used.
+  assert.match(workflow, /uses: actions\/configure-pages@[0-9a-f]{40} # v\d/);
+  assert.match(workflow, /uses: actions\/upload-pages-artifact@[0-9a-f]{40} # v\d/);
+  assert.match(workflow, /uses: actions\/deploy-pages@[0-9a-f]{40} # v\d/);
 });
 
 test("incremental-content-publish workflow persists private state only after live verification, and writes back to Notion only after state is persisted", async () => {

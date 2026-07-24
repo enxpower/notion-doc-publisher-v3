@@ -24,7 +24,10 @@ jobs:
 
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-      NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+      # NOTION_TOKEN is intentionally scoped only to the "Export PDF" step below
+      # (Phase 3 Prompt 5 hardening) — checkout, npm ci, Typst/font install, and
+      # artifact upload never receive it, narrowing exposure if the dispatcher-
+      # supplied branch's dependency lifecycle scripts were ever compromised.
       NOTION_DATABASE_ID: ${{ vars.NOTION_DATABASE_ID || secrets.NOTION_DATABASE_ID }}
       ALLOWED_VISIBILITY: ${{ vars.ALLOWED_VISIBILITY || secrets.ALLOWED_VISIBILITY }}
       PUBLISHABLE_STATUSES: ${{ vars.PUBLISHABLE_STATUSES || secrets.PUBLISHABLE_STATUSES }}
@@ -33,12 +36,12 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: ${{ inputs.branch }}
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "24"
           cache: npm
@@ -47,7 +50,7 @@ jobs:
         run: npm ci
 
       - name: Install Typst
-        uses: typst-community/setup-typst@v4
+        uses: typst-community/setup-typst@48aeee7543d37f01afd1ffb27307dc277387ba13 # v4.3.1
 
       - name: Install CJK and Latin fonts
         run: |
@@ -57,11 +60,13 @@ jobs:
           sudo fc-cache -fv
 
       - name: Export PDF
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
         run: npm run pdf:export -- ${{ inputs.doc_id }}
 
       - name: Upload PDF artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: pdf-${{ inputs.doc_id }}
           path: pdf-output/

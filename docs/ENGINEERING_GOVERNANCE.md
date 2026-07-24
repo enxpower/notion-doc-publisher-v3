@@ -59,6 +59,23 @@ AI coding agents must not:
 - Move, rename, or delete existing source files under `src/`.
 - Change existing npm script names in `package.json`.
 
+## Supply-Chain Change Policy (Phase 3 Prompt 5 addition)
+
+External GitHub Actions referenced under `.github/workflows/` must be pinned to a full
+40-character commit SHA with an inline human-readable version comment, resolved from the
+action's own official upstream repository — never an unverified fork, a branch, a short SHA,
+or an arbitrary commit. The custom Typst binary download in `incremental-content-publish.yml`
+must remain SHA-256 verified before extraction, with the expected hash reproducibly obtained
+from the official release asset. Any change to a pinned action SHA or the Typst checksum must:
+
+- go through a normal reviewed PR, not a direct commit;
+- update the corresponding approved-registry values in
+  `src/tests/supply-chain-hardening.test.ts` in the same change;
+- pass `npm run check`, `npm test`, and `npm run lint:security` before merge.
+
+Full detail: `docs/SYSTEM_ARCHITECTURE.md` ("Phase 3 Prompt 5: Supply-Chain and
+Secret-Boundary Hardening").
+
 ## PR Requirements
 
 Every PR must include:

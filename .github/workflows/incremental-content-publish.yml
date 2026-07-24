@@ -51,7 +51,7 @@ jobs:
 
     steps:
       - name: Checkout publisher
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Resolve execution mode
         id: execution
@@ -83,7 +83,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Checkout private state
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           repository: ${{ vars.PHASE2_STATE_REPOSITORY }}
           path: state
@@ -93,7 +93,7 @@ jobs:
 
       - name: Checkout ENERGIZE target
         if: ${{ steps.execution.outputs.mode == 'apply' }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           repository: enxpower/docs-energize-v2
           path: targets/docs-energize-v2
@@ -103,7 +103,7 @@ jobs:
 
       - name: Checkout AGIM target
         if: ${{ steps.execution.outputs.mode == 'apply' }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           repository: enxpower/agim-docs
           path: targets/agim-docs
@@ -113,7 +113,7 @@ jobs:
 
       - name: Checkout GONG target
         if: ${{ steps.execution.outputs.mode == 'apply' }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           repository: enxpower/pub
           path: targets/pub
@@ -122,7 +122,7 @@ jobs:
           persist-credentials: true
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "24"
           cache: npm
@@ -174,6 +174,14 @@ jobs:
         shell: bash
         env:
           TYPST_VERSION: "0.13.1"
+          # Phase 3 Prompt 5: reproducibly verified by downloading the official
+          # typst/typst v0.13.1 GitHub release asset for this exact platform
+          # (typst-x86_64-unknown-linux-musl.tar.xz) and computing its SHA-256.
+          # No official checksums file is published for this release; this hash
+          # was independently computed from the official asset, not invented.
+          # Re-verify and update both this value and TYPST_VERSION together
+          # whenever the pinned Typst version changes.
+          TYPST_SHA256_LINUX_X86_64: "7d214bfeffc2e585dc422d1a09d2b144969421281e8c7f5d784b65fc69b5673f"
         run: |
           set -euo pipefail
 
@@ -185,6 +193,12 @@ jobs:
           extract_dir="$RUNNER_TEMP/typst-extract"
 
           if curl             --fail             --location             --retry 8             --retry-all-errors             --retry-delay 10             --connect-timeout 30             --max-time 300             "$archive_url"             --output "$archive_path"; then
+
+            echo "${TYPST_SHA256_LINUX_X86_64}  ${archive_path}" > "$RUNNER_TEMP/typst.sha256"
+            if ! sha256sum --check --strict "$RUNNER_TEMP/typst.sha256"; then
+              echo "Typst download failed SHA-256 verification for v${TYPST_VERSION} (linux x86_64). Refusing to extract or execute a possibly-tampered binary." >&2
+              exit 1
+            fi
 
             rm -rf "$extract_dir"
             mkdir -p "$extract_dir"
@@ -240,18 +254,18 @@ jobs:
 
       - name: Configure GitHub Pages for ARCBOS
         if: ${{ steps.arcbos-artifact.outputs.required == 'true' }}
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5.0.0
 
       - name: Upload ARCBOS Pages artifact
         if: ${{ steps.arcbos-artifact.outputs.required == 'true' }}
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3.0.1
         with:
           path: targets/arcbos-pages
 
       - name: Deploy ARCBOS Pages artifact
         id: deploy-arcbos
         if: ${{ steps.arcbos-artifact.outputs.required == 'true' }}
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4.0.5
 
       - name: Validate target repository boundaries
         if: ${{ steps.execution.outputs.mode == 'apply' }}
@@ -335,7 +349,7 @@ jobs:
 
       - name: Upload transaction diagnostics
         if: ${{ always() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: incremental-publish-${{ github.run_id }}
           if-no-files-found: ignore

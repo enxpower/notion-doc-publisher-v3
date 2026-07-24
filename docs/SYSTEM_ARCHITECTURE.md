@@ -154,6 +154,59 @@ writeback step, after that ordering has already been satisfied for the run.
 been exercised against real production Notion data or a real production run, and must not be
 described as production-proven until such evidence exists.
 
+## Phase 3 Prompt 5: Supply-Chain and Secret-Boundary Hardening (Additive)
+
+This is additive Phase 3 hardening layered on top of the sealed Phase 2 architecture. It did
+not exist during Phase 2 and must not be read back into Phase 2's historical evidence.
+
+**Immutable action pinning.** Every external GitHub Action referenced anywhere under
+`.github/workflows/` is pinned to a full 40-character commit SHA, with an inline comment
+recording the human-readable version it corresponds to (for example,
+`uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0`). Each SHA was
+resolved directly from the action's own official upstream repository (`actions/*` or
+`typst-community/setup-typst`), not guessed. `src/tests/supply-chain-hardening.test.ts`
+enforces this structurally: every external `uses:` entry must resolve to a 40-hex-character
+SHA with a version comment, must match an approved owner/repository + SHA registry, and no
+`@v1`–`@v9`/`@main`/`@master` mutable reference may remain. **Update procedure:** when an
+action needs a newer version, resolve the new tag's commit SHA from the action's own upstream
+repository, update both the workflow file and the approved-registry map in the test file
+together, and validate through the normal PR/review process — never pin to an unverified fork,
+an arbitrary latest commit, or a commit unrelated to the intended release.
+
+**Typst binary checksum verification.** The production workflow's custom Typst install step
+(`incremental-content-publish.yml`) downloads the official `typst/typst` GitHub release
+tarball for the pinned version (`0.13.1`, linux x86_64 musl target) and now verifies its
+SHA-256 (`sha256sum --check --strict`) before extracting or executing it. No official
+checksums file is published for this release; the expected hash was obtained by
+reproducibly downloading the official release asset directly and computing its SHA-256 (not
+invented) — re-verify and update it alongside `TYPST_VERSION` whenever the pinned version
+changes. A checksum mismatch fails the step immediately (`exit 1`) and does not fall through
+to the cargo fallback; only a genuine network/download failure reaches that fallback, which
+remains version-pinned with `--locked`.
+
+**Secret/ref trust-boundary policy.** `NOTION_TOKEN` in the four manual QA/export workflows
+(`pdf-export.yml`, `pdf-publisher.yml`, `docx-pdf-export-qa.yml`, `typst-pdf-export-qa.yml`)
+is now scoped only to the specific step(s) that actually read Notion, not the job as a whole
+— checkout, `npm ci`, font/Typst installation, type-check/test/lint, and artifact-upload steps
+never receive it. This narrows exposure if a dispatcher-supplied branch's dependency lifecycle
+scripts were ever compromised, without removing the token from where it is still genuinely
+needed (none of these workflows write to Notion by default; QA remains fully functional). None
+of these workflows hold a brand deploy key, `pages: write`, or `id-token: write`. Production
+deploy keys (`DEPLOY_KEY_ENERGIZE`/`DEPLOY_KEY_AGIM`/`DEPLOY_KEY_GONG`/`DEPLOY_KEY_STATE`)
+remain exclusive to `incremental-content-publish.yml`, and no deploy-key-bearing checkout step
+takes a user- or event-controlled ref (only a fixed target-repository reference).
+
+**Permissions.** Every workflow's `permissions:` block was reviewed and found already minimal;
+no further reduction was possible without risking breakage (see the PR's Prompt 5 section for
+the full per-workflow registry). No workflow was given a broader permission than it already
+had.
+
+**Signed-APT trust model.** `apt-get install fonts-noto-cjk fonts-noto-cjk-extra
+fonts-liberation` relies on the GitHub-hosted Ubuntu runner's pre-configured, signed APT
+repositories — this is signed-repository trust, not immutable package pinning, and is not
+realistically improvable without vendoring fonts or building a custom runner image, which is
+out of scope here. No custom or unsigned APT source is added anywhere.
+
 ## Architecture Drift Risks
 
 Watch for:
